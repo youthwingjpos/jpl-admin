@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JPL Season 1 - Admin Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #16a34a; --primary-dark: #15803d; --secondary: #2563eb;
+            --danger: #ef4444; --warning: #f59e0b;
+            --gray-50:#f9fafb; --gray-100:#f3f4f6; --gray-200:#e5e7eb; --gray-300:#d1d5db;
+            --gray-600:#4b5563; --gray-700:#374151; --gray-800:#1f2937; --gray-900:#111827;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #134e4a 0%, #1e3a8a 100%);
+            min-height: 100vh; padding: 20px;
+        }
+
+        /* LOGIN */
+        .login-container { max-width: 450px; margin: 90px auto; background: white; border-radius: 20px; padding: 50px 40px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center; }
+        .login-logo { font-size: 3em; margin-bottom: 10px; }
+        .login-title { font-size: 1.7em; color: var(--gray-900); margin-bottom: 8px; font-weight: 700; }
+        .login-subtitle { color: var(--gray-600); margin-bottom: 35px; font-size: 0.95em; }
+        .login-input { width: 100%; padding: 15px 20px; border: 2px solid var(--gray-200); border-radius: 10px; font-size: 1em; margin-bottom: 20px; }
+        .login-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(22,163,74,0.1); }
+        .login-btn { width: 100%; padding: 15px; background: var(--primary); color: white; border: none; border-radius: 10px; font-size: 1.1em; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+        .login-btn:hover { background: var(--primary-dark); transform: translateY(-2px); }
+        .login-error { background: #fee; color: var(--danger); padding: 12px; border-radius: 8px; margin-top: 15px; display: none; font-size: 0.9em; }
+        .login-footer { margin-top: 30px; color: var(--gray-600); font-size: 0.85em; }
+
+        /* DASHBOARD */
+        .dashboard { display: none; max-width: 1400px; margin: 0 auto; }
+        .dashboard.active { display: block; }
+        .dashboard-header { background: white; padding: 20px 30px; border-radius: 15px; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); flex-wrap: wrap; gap: 15px; }
+        .dashboard-title h1 { font-size: 1.7em; color: var(--gray-900); }
+        .dashboard-title small { color: var(--gray-600); font-size: 0.9em; }
+        .header-actions { display: flex; gap: 10px; align-items: center; }
+        .refresh-btn { padding: 10px 18px; background: var(--secondary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
+        .refresh-btn:hover { background: #1d4ed8; }
+        .logout-btn { padding: 10px 20px; background: var(--danger); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
+        .logout-btn:hover { background: #dc2626; }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 25px; }
+        .stat-card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 20px; }
+        .stat-icon { width: 58px; height: 58px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.7em; }
+        .stat-icon.green { background: #d1fae5; } .stat-icon.blue { background: #dbeafe; }
+        .stat-icon.yellow { background: #fef3c7; } .stat-icon.purple { background: #ede9fe; }
+        .stat-info h3 { font-size: 1.9em; color: var(--gray-900); margin-bottom: 4px; }
+        .stat-info p { color: var(--gray-600); font-size: 0.9em; }
+
+        .controls-panel { background: white; padding: 22px 25px; border-radius: 15px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .search-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 15px; margin-bottom: 15px; }
+        .search-input, .filter-select { padding: 12px 15px; border: 2px solid var(--gray-200); border-radius: 8px; font-size: 0.95em; }
+        .search-input:focus, .filter-select:focus { outline: none; border-color: var(--primary); }
+        .btn { padding: 12px 22px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.3s; font-size: 0.9em; }
+        .btn-primary { background: var(--secondary); color: white; } .btn-primary:hover { background: #1d4ed8; }
+        .btn-secondary { background: var(--gray-200); color: var(--gray-700); } .btn-secondary:hover { background: var(--gray-300); }
+        .btn-success { background: var(--primary); color: white; } .btn-success:hover { background: var(--primary-dark); }
+        .action-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+
+        .table-container { background: white; border-radius: 15px; padding: 25px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow-x: auto; }
+        .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+        .table-header h2 { font-size: 1.3em; color: var(--gray-900); }
+        table { width: 100%; border-collapse: collapse; }
+        thead { background: var(--gray-50); }
+        th { padding: 14px; text-align: left; font-weight: 600; color: var(--gray-700); cursor: pointer; user-select: none; white-space: nowrap; }
+        th:hover { background: var(--gray-100); }
+        td { padding: 14px; border-bottom: 1px solid var(--gray-200); font-size: 0.92em; }
+        tbody tr:hover { background: var(--gray-50); }
+        .role-badge, .size-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.82em; font-weight: 600; white-space: nowrap; }
+        .role-badge { background: #dbeafe; color: #1e40af; }
+        .size-badge { background: #f3f4f6; color: #374151; }
+        .ref-cell { font-family: monospace; font-size: 0.85em; color: var(--gray-700); }
+
+        .loading { text-align: center; padding: 40px; color: var(--gray-600); }
+        .spinner { border: 4px solid var(--gray-200); border-top: 4px solid var(--primary); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .empty-state { text-align: center; padding: 50px; color: #9ca3af; }
+        .empty-state .big { font-size: 3em; margin-bottom: 10px; }
+
+        .role-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .role-group { border: 2px solid var(--gray-200); border-radius: 12px; overflow: hidden; }
+        .role-group-header { padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; color: #fff; font-weight: 700; font-size: 1.1em; }
+        .rg-batsman { background: #2563eb; } .rg-bowler { background: #dc2626; }
+        .rg-allrounder { background: #16a34a; } .rg-wk { background: #7c3aed; } .rg-other { background: #4b5563; }
+        .role-group-count { background: rgba(255,255,255,0.28); padding: 3px 13px; border-radius: 20px; font-size: 0.9em; }
+        .role-group-body { padding: 10px 12px; max-height: 340px; overflow-y: auto; }
+        .rg-player { padding: 10px 8px; border-bottom: 1px solid var(--gray-100); font-size: 0.9em; }
+        .rg-player:last-child { border-bottom: none; }
+        .rg-player strong { color: var(--gray-900); }
+        .rg-player small { color: var(--gray-600); display: block; margin-top: 3px; }
+        .rg-empty { color: #9ca3af; padding: 20px; font-size: 0.9em; text-align: center; }
+        #roleGroupTotals { color: var(--gray-600); font-size: 0.9em; }
+
+        /* Tabs */
+        .tab-bar { display: flex; gap: 10px; margin-bottom: 25px; }
+        .tab-btn { padding: 12px 26px; border: none; border-radius: 10px; background: white; color: var(--gray-700); font-weight: 600; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 0.95em; }
+        .tab-btn.active { background: var(--primary); color: #fff; }
+
+        /* T-shirt size totals */
+        .size-totals { display: flex; flex-wrap: wrap; gap: 12px; }
+        .size-pill { background: var(--gray-100); border-radius: 10px; padding: 10px 18px; font-weight: 700; color: var(--gray-800); font-size: 1.05em; }
+        .size-pill span { color: var(--primary); }
+
+        /* Team builder */
+        .teams-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+        .teams-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; }
+        .team-card { background: var(--gray-50); border: 2px solid var(--gray-200); border-radius: 15px; padding: 18px; }
+        .team-name-input { width: 100%; padding: 12px 14px; border: 2px solid var(--gray-300); border-radius: 10px; font-size: 1.1em; font-weight: 700; margin-bottom: 14px; color: var(--gray-900); }
+        .team-name-input:focus { outline: none; border-color: var(--primary); }
+        .slot { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .slot-num { width: 20px; color: var(--gray-600); font-weight: 700; font-size: 0.9em; text-align: center; }
+        .slot-name { flex: 1; padding: 9px 12px; border: 1.5px solid var(--gray-200); border-radius: 8px; font-size: 0.95em; background: white; }
+        .slot-name:focus { outline: none; border-color: var(--primary); }
+        .slot-role { min-width: 104px; text-align: center; padding: 5px 8px; border-radius: 20px; font-size: 0.76em; font-weight: 700; background: var(--gray-200); color: var(--gray-500); white-space: nowrap; }
+        .slot-role.batsman { background: #dbeafe; color: #1e40af; }
+        .slot-role.bowler { background: #fee2e2; color: #991b1b; }
+        .slot-role.allrounder { background: #d1fae5; color: #065f46; }
+        .slot-role.wk { background: #ede9fe; color: #5b21b6; }
+        .save-status { color: var(--primary); font-weight: 600; font-size: 0.9em; }
+
+        @media (max-width: 768px) { .search-row { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <!-- LOGIN -->
+    <div class="login-container" id="loginScreen">
+        <div class="login-logo">🏏</div>
+        <h1 class="login-title">JPL Admin Dashboard</h1>
+        <p class="login-subtitle">JPOS Premier League — Season 1 Registrations</p>
+        <input type="password" id="passwordInput" class="login-input" placeholder="Enter Admin Password" autocomplete="off">
+        <button onclick="login()" class="login-btn">Login</button>
+        <div class="login-error" id="loginError">Invalid password. Please try again.</div>
+        <div class="login-footer">Authorized Admins Only<br>Contact: Saafal 8939225539</div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div class="dashboard" id="dashboardScreen">
+        <div class="dashboard-header">
+            <div class="dashboard-title">
+                <h1>🏏 JPL Season 1 — Registrations</h1>
+                <small>JPOS Premier League Admin</small>
+            </div>
+            <div class="header-actions">
+                <button onclick="loadData()" class="refresh-btn">🔄 Refresh</button>
+                <button onclick="logout()" class="logout-btn">Logout</button>
+            </div>
+        </div>
+
+        <div class="tab-bar">
+            <button class="tab-btn active" id="tabRegBtn" onclick="switchTab('registrations')">📋 Registrations</button>
+            <button class="tab-btn" id="tabTeamsBtn" onclick="switchTab('teams')">🏏 Teams</button>
+        </div>
+
+        <div id="viewRegistrations">
+        <div class="stats-grid">
+            <div class="stat-card"><div class="stat-icon green">👥</div><div class="stat-info"><h3 id="statTotal">0</h3><p>Total Registrations</p></div></div>
+            <div class="stat-card"><div class="stat-icon yellow">💰</div><div class="stat-info"><h3 id="statCollected">₹0</h3><p>Amount Collected</p></div></div>
+            <div class="stat-card"><div class="stat-icon blue">🏏</div><div class="stat-info"><h3 id="statTopRole">--</h3><p>Most Common Role</p></div></div>
+            <div class="stat-card"><div class="stat-icon purple">👕</div><div class="stat-info"><h3 id="statTopSize">--</h3><p>Most Common Size</p></div></div>
+        </div>
+
+        <div class="table-container" style="padding: 20px 25px;">
+            <div class="table-header" style="margin-bottom: 14px;">
+                <h2 style="font-size: 1.2em;">👕 T-Shirt Size Totals</h2>
+            </div>
+            <div class="size-totals" id="sizeTotals"></div>
+        </div>
+
+        <div class="controls-panel">
+            <div class="search-row">
+                <input type="text" id="searchInput" class="search-input" placeholder="🔍 Search by UID, phone, skills...">
+                <select id="filterRole" class="filter-select">
+                    <option value="">All Roles</option>
+                    <option value="Batsman">Batsman</option>
+                    <option value="Bowler">Bowler</option>
+                    <option value="All Rounder">All Rounder</option>
+                    <option value="WK Keeper">WK Keeper</option>
+                </select>
+                <select id="filterSize" class="filter-select">
+                    <option value="">All Sizes</option>
+                    <option value="S">S</option><option value="M">M</option><option value="L">L</option>
+                    <option value="XL">XL</option><option value="XXL">XXL</option>
+                </select>
+                <button onclick="clearFilters()" class="btn btn-secondary">Clear</button>
+            </div>
+            <div class="action-buttons">
+                <button onclick="exportToExcel()" class="btn btn-success">📥 Export Excel</button>
+                <button onclick="exportToCSV()" class="btn btn-primary">📄 Export CSV</button>
+                <button onclick="copyPhoneNumbers()" class="btn btn-primary">📱 Copy Phone List</button>
+                <button onclick="copySizeSummary()" class="btn btn-secondary">👕 T-Shirt Summary</button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <div class="table-header">
+                <h2>📋 Player Directory</h2>
+                <div id="resultsCount">Showing 0 players</div>
+            </div>
+            <div id="loadingIndicator" class="loading"><div class="spinner"></div><p>Loading registrations...</p></div>
+            <table id="playersTable" style="display:none;">
+                <thead>
+                    <tr>
+                        <th onclick="sortTable('uid')">UID ↕</th>
+                        <th onclick="sortTable('name')">Name ↕</th>
+                        <th onclick="sortTable('phone')">Phone ↕</th>
+                        <th onclick="sortTable('dob')">DOB ↕</th>
+                        <th onclick="sortTable('age')">Age ↕</th>
+                        <th onclick="sortTable('role')">Role ↕</th>
+                        <th>Skills</th>
+                        <th onclick="sortTable('tshirt')">T-Shirt ↕</th>
+                        <th>Payment Ref</th>
+                        <th onclick="sortTable('timestamp')">Registered ↕</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+            <div id="emptyState" class="empty-state" style="display:none;">
+                <div class="big">🏏</div>
+                <p id="emptyText">No registrations yet.</p>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <div class="table-header">
+                <h2>🏏 Players by Role</h2>
+                <div id="roleGroupTotals"></div>
+            </div>
+            <div class="role-groups" id="roleGroups"></div>
+        </div>
+        </div><!-- end viewRegistrations -->
+
+        <div id="viewTeams" style="display:none;">
+            <div class="table-container">
+                <div class="teams-toolbar">
+                    <h2 style="font-size: 1.3em; color: var(--gray-900);">🏏 Team Builder — 8 Teams × 8 Players</h2>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <span class="save-status" id="teamsSaveStatus"></span>
+                        <button onclick="saveTeams()" class="btn btn-success">💾 Save Teams</button>
+                    </div>
+                </div>
+                <p style="color: var(--gray-600); margin-bottom: 18px; font-size: 0.9em;">
+                    Type a team name and player names. Each player's role (Batsman / Bowler / All Rounder / WK Keeper) is pulled from the registrations automatically. Click <strong>Save Teams</strong> to store them in the Google Sheet.
+                </p>
+                <div class="teams-grid" id="teamsGrid"></div>
+            </div>
+        </div>
+
+        <datalist id="playerNames"></datalist>
+    </div>
+
+    <script>
+        // ============================================================
+        // CONFIGURATION — UPDATE THESE
+        // ============================================================
+        const ADMIN_PASSWORD = "jpl2026"; // CHANGE THIS PASSWORD!
+        // Reads the JPL registrations sheet (1yllf...). For this to load, the
+        // sheet must be shared "Anyone with the link → Viewer".
+        const MEMBER_DATA_CSV = "https://docs.google.com/spreadsheets/d/1yllfr4bB-vhakCkgvhQuVurSnSUp76nrNIOpW23SwTU/gviz/tq?tqx=out:csv&gid=0";
+        const AMOUNT_PER_PLAYER = 200;
+        // Reads/saves the 8 teams. TEAMS_CSV reads the "Teams" tab; saving the
+        // teams needs the same Apps Script /exec URL the form uses.
+        const TEAMS_CSV = "https://docs.google.com/spreadsheets/d/1yllfr4bB-vhakCkgvhQuVurSnSUp76nrNIOpW23SwTU/gviz/tq?tqx=out:csv&sheet=Teams";
+        const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbyT7kmCPlzf0BORlqMKhL7k8y42G5ucR9jwymg9jhoWq5uBGcIS2iiAuUl2rXb4b2bM/exec";
+        // ============================================================
+
+        let allPlayers = [];
+        let filteredPlayers = [];
+        let currentSort = { field: 'timestamp', order: 'desc' };
+
+        // ---------- AUTH ----------
+        function login() {
+            const pw = document.getElementById('passwordInput').value;
+            if (pw === ADMIN_PASSWORD) {
+                sessionStorage.setItem('jplAdminAuth', btoa(pw));
+                sessionStorage.setItem('jplLoginTime', Date.now());
+                showDashboard();
+            } else {
+                document.getElementById('loginError').style.display = 'block';
+                document.getElementById('passwordInput').value = '';
+            }
+        }
+        function logout() { sessionStorage.removeItem('jplAdminAuth'); sessionStorage.removeItem('jplLoginTime'); location.reload(); }
+        function showDashboard() {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('dashboardScreen').classList.add('active');
+            loadData();
+        }
+        function checkAuth() {
+            const auth = sessionStorage.getItem('jplAdminAuth');
+            const t = sessionStorage.getItem('jplLoginTime');
+            if (auth && t && (Date.now() - parseInt(t)) < 4 * 60 * 60 * 1000 && atob(auth) === ADMIN_PASSWORD) {
+                showDashboard();
+            } else { sessionStorage.clear(); }
+        }
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('passwordInput')?.addEventListener('keypress', e => { if (e.key === 'Enter') login(); });
+            checkAuth();
+        });
+
+        // ---------- DATA ----------
+        async function loadData() {
+            const loading = document.getElementById('loadingIndicator');
+            const table = document.getElementById('playersTable');
+            const empty = document.getElementById('emptyState');
+            loading.style.display = 'block'; table.style.display = 'none'; empty.style.display = 'none';
+
+            if (MEMBER_DATA_CSV === "PASTE_YOUR_REGISTRATIONS_SHEET_CSV_URL_HERE") {
+                loading.style.display = 'none'; empty.style.display = 'block';
+                document.getElementById('emptyText').textContent = 'Backend not configured. Paste your published CSV link into MEMBER_DATA_CSV in index.html.';
+                return;
+            }
+            try {
+                const res = await fetch(MEMBER_DATA_CSV + (MEMBER_DATA_CSV.includes('?') ? '&' : '?') + 'cachebust=' + Date.now());
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                allPlayers = parseCSV(await res.text());
+                filteredPlayers = [...allPlayers];
+                sortTable(currentSort.field, true);
+                updateStats(); renderTable();
+            } catch (err) {
+                console.error(err);
+                loading.style.display = 'none'; empty.style.display = 'block';
+                document.getElementById('emptyText').textContent = 'Error loading data: ' + err.message;
+            }
+        }
+
+        function parseCSV(csv) {
+            const rows = parseCSVRows(csv.replace(/\r\n/g, '\n').replace(/\r/g, '\n'));
+            if (rows.length < 2) return [];
+            const headers = rows[0].map(h => h.trim());
+            const out = [];
+            for (let i = 1; i < rows.length; i++) {
+                if (rows[i].every(v => !v.trim())) continue;
+                const o = {};
+                headers.forEach((h, idx) => { o[h] = (rows[i][idx] || '').trim(); });
+                out.push(o);
+            }
+            return out;
+        }
+        function parseCSVRows(csv) {
+            const rows = []; let row = [], cur = '', q = false;
+            for (let i = 0; i < csv.length; i++) {
+                const ch = csv[i];
+                if (ch === '"') { if (q && csv[i+1] === '"') { cur += '"'; i++; } else q = !q; }
+                else if (ch === ',' && !q) { row.push(cur); cur = ''; }
+                else if (ch === '\n' && !q) { row.push(cur); rows.push(row); row = []; cur = ''; }
+                else cur += ch;
+            }
+            if (cur || row.length) { row.push(cur); if (row.some(v => v.trim())) rows.push(row); }
+            return rows;
+        }
+
+        // Flexible getters (tolerate header name variations)
+        const g = (m, keys) => { for (const k of keys) if (m[k] != null && m[k] !== '') return m[k]; return ''; };
+        const getUID   = m => g(m, ['UID','Uid','uid','Member ID']);
+        const getName  = m => g(m, ['Name','name','Player Name']);
+        const getPhone = m => g(m, ['Phone','phone','Phone Number','Mobile']);
+        const getDOB   = m => g(m, ['DOB','Date of Birth','dob']);
+        const getAge   = m => g(m, ['Age','age']);
+        const getRole  = m => g(m, ['Role','role','Playing Role']);
+        const getSkills= m => g(m, ['Skills','skills','Skills / Description','Description']);
+        const getSize  = m => g(m, ['T-Shirt','Tshirt','T-Shirt Size','tshirt','Size']);
+        const getRef   = m => g(m, ['Payment Ref','Payment Reference','paymentRef','Reference','UTR']);
+        const getTime  = m => g(m, ['Timestamp','timestamp','Registered','Date']);
+
+        // ---------- STATS ----------
+        function updateStats() {
+            document.getElementById('statTotal').textContent = allPlayers.length;
+            document.getElementById('statCollected').textContent = '₹' + (allPlayers.length * AMOUNT_PER_PLAYER).toLocaleString('en-IN');
+            document.getElementById('statTopRole').textContent = mode(allPlayers.map(getRole)) || '--';
+            document.getElementById('statTopSize').textContent = mode(allPlayers.map(getSize)) || '--';
+            renderSizeTotals();
+            updatePlayerDatalist();
+            if (teamsBuilt) refreshTeamRoles();
+        }
+
+        function renderSizeTotals() {
+            const el = document.getElementById('sizeTotals');
+            if (!el) return;
+            const order = ['S', 'M', 'L', 'XL', 'XXL'];
+            const counts = {};
+            allPlayers.forEach(m => { const s = (getSize(m) || '').toUpperCase(); if (s) counts[s] = (counts[s] || 0) + 1; });
+            const known = order.filter(s => counts[s] != null);
+            const extra = Object.keys(counts).filter(s => !order.includes(s));
+            const all = known.concat(extra);
+            if (!all.length) { el.innerHTML = '<div style="color:#9ca3af;">No sizes yet.</div>'; return; }
+            el.innerHTML = all.map(s => '<div class="size-pill">' + esc(s) + ' - <span>' + counts[s] + '</span></div>').join('') +
+                '<div class="size-pill" style="background:var(--primary);color:#fff;">Total - ' + allPlayers.length + '</div>';
+        }
+        function mode(arr) {
+            const c = {}; let best = '', n = 0;
+            arr.filter(Boolean).forEach(v => { c[v] = (c[v]||0)+1; if (c[v] > n) { n = c[v]; best = v; } });
+            return best;
+        }
+
+        // ---------- FILTER / SORT ----------
+        function applyFilters() {
+            const s = document.getElementById('searchInput').value.toLowerCase();
+            const role = document.getElementById('filterRole').value;
+            const size = document.getElementById('filterSize').value;
+            filteredPlayers = allPlayers.filter(m => {
+                if (role && getRole(m) !== role) return false;
+                if (size && getSize(m) !== size) return false;
+                if (s) {
+                    const hay = [getUID(m), getName(m), getPhone(m), getSkills(m), getRole(m), getRef(m)].join(' ').toLowerCase();
+                    if (!hay.includes(s)) return false;
+                }
+                return true;
+            });
+            renderTable();
+        }
+        function clearFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('filterRole').value = '';
+            document.getElementById('filterSize').value = '';
+            filteredPlayers = [...allPlayers];
+            renderTable();
+        }
+        ['searchInput','filterRole','filterSize'].forEach(id => {
+            document.addEventListener('DOMContentLoaded', () => {
+                const el = document.getElementById(id);
+                el.addEventListener('change', applyFilters);
+                if (id === 'searchInput') el.addEventListener('keyup', applyFilters);
+            });
+        });
+
+        function sortTable(field, keepOrder) {
+            if (!keepOrder) {
+                if (currentSort.field === field) currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
+                else { currentSort.field = field; currentSort.order = 'asc'; }
+            }
+            const get = { uid:getUID, name:getName, phone:getPhone, dob:getDOB, age:getAge, role:getRole, tshirt:getSize, timestamp:getTime }[field] || getTime;
+            filteredPlayers.sort((a, b) => {
+                let av = get(a), bv = get(b);
+                if (field === 'age') { av = parseInt(av)||0; bv = parseInt(bv)||0; }
+                else { av = (av||'').toString().toLowerCase(); bv = (bv||'').toString().toLowerCase(); }
+                if (av === bv) return 0;
+                return (currentSort.order === 'asc' ? 1 : -1) * (av > bv ? 1 : -1);
+            });
+            if (!keepOrder) renderTable();
+        }
+
+        // ---------- RENDER ----------
+        const ROLE_ORDER = ['Batsman', 'Bowler', 'All Rounder', 'WK Keeper'];
+        const ROLE_CLASS = { 'Batsman': 'rg-batsman', 'Bowler': 'rg-bowler', 'All Rounder': 'rg-allrounder', 'WK Keeper': 'rg-wk' };
+        const ROLE_ICON  = { 'Batsman': '🏏', 'Bowler': '🎯', 'All Rounder': '⭐', 'WK Keeper': '🧤' };
+
+        function renderRoleGroups() {
+            const container = document.getElementById('roleGroups');
+            const totals = document.getElementById('roleGroupTotals');
+            const groups = {};
+            filteredPlayers.forEach(m => { const r = getRole(m) || 'Unspecified'; (groups[r] = groups[r] || []).push(m); });
+            const roles = ROLE_ORDER.filter(r => groups[r])
+                .concat(Object.keys(groups).filter(r => !ROLE_ORDER.includes(r)).sort());
+
+            totals.textContent = roles.map(r => (ROLE_ICON[r] || '') + ' ' + r + ': ' + groups[r].length).join('    ');
+
+            if (!roles.length) { container.innerHTML = '<div class="rg-empty">No registrations yet.</div>'; return; }
+            container.innerHTML = roles.map(r => {
+                const cls = ROLE_CLASS[r] || 'rg-other';
+                const players = groups[r].map(m =>
+                    '<div class="rg-player"><strong>' + esc(getUID(m)) + ' — ' + esc(getName(m) || '-') + '</strong>' +
+                    '<small>' + esc(getPhone(m) || '') +
+                    (getSize(m) ? ' · 👕 ' + esc(getSize(m)) : '') +
+                    (getAge(m) ? ' · ' + esc(getAge(m)) + 'y' : '') + '</small></div>'
+                ).join('');
+                return '<div class="role-group"><div class="role-group-header ' + cls + '">' +
+                    '<span>' + (ROLE_ICON[r] || '') + ' ' + esc(r) + '</span>' +
+                    '<span class="role-group-count">' + groups[r].length + '</span></div>' +
+                    '<div class="role-group-body">' + players + '</div></div>';
+            }).join('');
+        }
+
+        function renderTable() {
+            const loading = document.getElementById('loadingIndicator');
+            const table = document.getElementById('playersTable');
+            const empty = document.getElementById('emptyState');
+            const tbody = document.getElementById('tableBody');
+            loading.style.display = 'none';
+            renderRoleGroups();
+
+            if (!filteredPlayers.length) {
+                table.style.display = 'none'; empty.style.display = 'block';
+                document.getElementById('emptyText').textContent = allPlayers.length ? 'No players match your filters.' : 'No registrations yet.';
+                document.getElementById('resultsCount').textContent = 'Showing 0 players';
+                return;
+            }
+            empty.style.display = 'none'; table.style.display = 'table';
+            tbody.innerHTML = '';
+            filteredPlayers.forEach(m => {
+                const tr = tbody.insertRow();
+                tr.innerHTML =
+                    '<td><strong>' + esc(getUID(m)) + '</strong></td>' +
+                    '<td>' + esc(getName(m) || '-') + '</td>' +
+                    '<td>' + esc(getPhone(m)) + '</td>' +
+                    '<td>' + esc(getDOB(m) || '-') + '</td>' +
+                    '<td>' + esc(getAge(m)) + '</td>' +
+                    '<td><span class="role-badge">' + esc(getRole(m) || '-') + '</span></td>' +
+                    '<td>' + esc(getSkills(m) || '-') + '</td>' +
+                    '<td><span class="size-badge">' + esc(getSize(m) || '-') + '</span></td>' +
+                    '<td class="ref-cell">' + esc(getRef(m) || '-') + '</td>' +
+                    '<td>' + esc(fmtDate(getTime(m))) + '</td>';
+            });
+            document.getElementById('resultsCount').textContent = 'Showing ' + filteredPlayers.length + ' of ' + allPlayers.length + ' players';
+        }
+        function esc(s) { return (s == null ? '' : String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+        function fmtDate(iso) { if (!iso) return '-'; const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleDateString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }); }
+
+        // ---------- EXPORT / COPY ----------
+        function rowsForExport() {
+            return filteredPlayers.map(m => ({
+                UID: getUID(m), Name: getName(m), Phone: getPhone(m), DOB: getDOB(m), Age: getAge(m), Role: getRole(m),
+                Skills: getSkills(m), 'T-Shirt': getSize(m), Amount: AMOUNT_PER_PLAYER,
+                'Payment Ref': getRef(m), Registered: getTime(m)
+            }));
+        }
+        function exportToExcel() {
+            const ws = XLSX.utils.json_to_sheet(rowsForExport());
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'JPL S1');
+            XLSX.writeFile(wb, 'JPL_Season1_Registrations.xlsx');
+        }
+        function exportToCSV() {
+            const rows = rowsForExport();
+            if (!rows.length) return alert('No data to export.');
+            const headers = Object.keys(rows[0]);
+            const csv = [headers.join(',')].concat(rows.map(r => headers.map(h => '"' + String(r[h]).replace(/"/g,'""') + '"').join(','))).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob); a.download = 'JPL_Season1_Registrations.csv'; a.click();
+        }
+        function copyPhoneNumbers() {
+            const nums = filteredPlayers.map(getPhone).filter(Boolean).join('\n');
+            navigator.clipboard.writeText(nums).then(() => alert('Copied ' + filteredPlayers.filter(m=>getPhone(m)).length + ' phone numbers.'));
+        }
+        function copySizeSummary() {
+            const c = {}; allPlayers.forEach(m => { const s = getSize(m) || 'Unspecified'; c[s] = (c[s]||0)+1; });
+            const order = ['S','M','L','XL','XXL'];
+            const lines = order.filter(s => c[s]).map(s => s + ': ' + c[s]);
+            Object.keys(c).filter(k => !order.includes(k)).forEach(k => lines.push(k + ': ' + c[k]));
+            const text = 'JPL Season 1 — T-Shirt Sizes\n' + lines.join('\n') + '\nTotal: ' + allPlayers.length;
+            navigator.clipboard.writeText(text).then(() => alert(text));
+        }
+
+        // ============================================================
+        // TABS + TEAM BUILDER
+        // ============================================================
+        function switchTab(tab) {
+            const reg = tab === 'registrations';
+            document.getElementById('viewRegistrations').style.display = reg ? 'block' : 'none';
+            document.getElementById('viewTeams').style.display = reg ? 'none' : 'block';
+            document.getElementById('tabRegBtn').classList.toggle('active', reg);
+            document.getElementById('tabTeamsBtn').classList.toggle('active', !reg);
+            if (!reg) {
+                if (!teamsBuilt) initTeams();
+                else { updatePlayerDatalist(); refreshTeamRoles(); }
+            }
+        }
+
+        const TEAM_COUNT = 8, SLOT_COUNT = 8;
+        let teamsBuilt = false;
+        let teamsData = null;
+
+        function defaultTeams() {
+            return Array.from({ length: TEAM_COUNT }, () => ({ name: '', players: Array(SLOT_COUNT).fill('') }));
+        }
+        function loadTeamsLocal() { try { const s = localStorage.getItem('jplTeams'); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+        function saveTeamsLocal() { try { localStorage.setItem('jplTeams', JSON.stringify(teamsData)); } catch (e) {} }
+
+        async function initTeams() {
+            teamsData = loadTeamsLocal() || defaultTeams();
+            buildTeamsUI();
+            teamsBuilt = true;
+            try {
+                const fromSheet = await fetchTeamsSheet();
+                if (fromSheet && fromSheet.some(t => t.name || t.players.some(Boolean))) {
+                    teamsData = fromSheet;
+                    buildTeamsUI();
+                }
+            } catch (e) { /* keep local copy */ }
+        }
+
+        async function fetchTeamsSheet() {
+            const res = await fetch(TEAMS_CSV + '&cachebust=' + Date.now());
+            if (!res.ok) return null;
+            const txt = await res.text();
+            if (!txt.trim() || /<!doctype|<html/i.test(txt)) return null;
+            const rows = parseCSV(txt);
+            if (!rows.length) return null;
+            const teams = rows.slice(0, TEAM_COUNT).map(r => ({
+                name: r['Team Name'] || '',
+                players: Array.from({ length: SLOT_COUNT }, (_, i) => r['Player ' + (i + 1)] || '')
+            }));
+            while (teams.length < TEAM_COUNT) teams.push({ name: '', players: Array(SLOT_COUNT).fill('') });
+            return teams;
+        }
+
+        function buildTeamsUI() {
+            updatePlayerDatalist();
+            const grid = document.getElementById('teamsGrid');
+            grid.innerHTML = teamsData.map((t, ti) => {
+                const slots = t.players.map((p, si) =>
+                    '<div class="slot">' +
+                        '<span class="slot-num">' + (si + 1) + '</span>' +
+                        '<input class="slot-name" list="playerNames" data-t="' + ti + '" data-s="' + si + '" value="' + esc(p) + '" placeholder="Player ' + (si + 1) + '">' +
+                        '<span class="slot-role" id="role-' + ti + '-' + si + '">—</span>' +
+                    '</div>'
+                ).join('');
+                return '<div class="team-card">' +
+                    '<input class="team-name-input" data-t="' + ti + '" value="' + esc(t.name) + '" placeholder="Team ' + (ti + 1) + ' name">' +
+                    '<div class="team-slots">' + slots + '</div></div>';
+            }).join('');
+
+            grid.querySelectorAll('.team-name-input').forEach(inp => {
+                inp.addEventListener('input', e => { teamsData[+e.target.dataset.t].name = e.target.value; });
+            });
+            grid.querySelectorAll('.slot-name').forEach(inp => {
+                inp.addEventListener('input', e => {
+                    const ti = +e.target.dataset.t, si = +e.target.dataset.s;
+                    teamsData[ti].players[si] = e.target.value;
+                    updateSlotRole(ti, si);
+                });
+            });
+            refreshTeamRoles();
+        }
+
+        function refreshTeamRoles() {
+            if (!teamsData) return;
+            teamsData.forEach((t, ti) => t.players.forEach((p, si) => updateSlotRole(ti, si)));
+        }
+
+        function updateSlotRole(ti, si) {
+            const badge = document.getElementById('role-' + ti + '-' + si);
+            if (!badge) return;
+            const val = (teamsData[ti].players[si] || '').trim();
+            if (!val) { badge.textContent = '—'; badge.className = 'slot-role'; return; }
+            const role = findPlayerRole(val);
+            if (!role) { badge.textContent = 'not registered'; badge.className = 'slot-role'; return; }
+            const map = { 'Batsman': 'batsman', 'Bowler': 'bowler', 'All Rounder': 'allrounder', 'WK Keeper': 'wk' };
+            badge.textContent = role;
+            badge.className = 'slot-role ' + (map[role] || '');
+        }
+
+        function findPlayerRole(query) {
+            const q = query.trim().toLowerCase();
+            const m = allPlayers.find(p =>
+                (getName(p) || '').trim().toLowerCase() === q ||
+                String(getUID(p) || '').trim().toLowerCase() === q);
+            return m ? getRole(m) : '';
+        }
+
+        function updatePlayerDatalist() {
+            const dl = document.getElementById('playerNames');
+            if (!dl) return;
+            dl.innerHTML = allPlayers.map(p => '<option value="' + esc(getName(p) || getUID(p)) + '">').join('');
+        }
+
+        async function saveTeams() {
+            saveTeamsLocal();
+            const status = document.getElementById('teamsSaveStatus');
+            status.textContent = 'Saving...';
+            if (GOOGLE_SHEETS_URL && GOOGLE_SHEETS_URL !== 'PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE') {
+                try {
+                    await fetch(GOOGLE_SHEETS_URL, {
+                        method: 'POST', mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'saveTeams', teams: teamsData })
+                    });
+                    status.textContent = '✓ Saved to Google Sheet';
+                } catch (e) {
+                    status.textContent = 'Saved in browser (Sheet save failed)';
+                }
+            } else {
+                status.textContent = '✓ Saved in this browser — set Apps Script URL to sync to Sheet';
+            }
+            setTimeout(() => { status.textContent = ''; }, 4500);
+        }
+    </script>
+</body>
+</html>
