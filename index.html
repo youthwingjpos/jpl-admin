@@ -380,7 +380,13 @@
         const getSkills= m => g(m, ['Skills','skills','Skills / Description','Description']);
         const getSize  = m => g(m, ['T-Shirt','Tshirt','T-Shirt Size','tshirt','Size']);
         const getRef   = m => g(m, ['Payment Ref','Payment Reference','paymentRef','Reference','UTR']);
-        const getShot  = m => g(m, ['Screenshot','screenshot','Proof','Payment Screenshot']);
+        const getShot  = m => {
+            const named = g(m, ['Screenshot','screenshot','Proof','Payment Screenshot']);
+            if (named) return named;
+            // Fallback: the backend may have written the URL under a blank header cell.
+            for (const k in m) { if (/https?:\/\/(drive|docs|lh\d)\.google(usercontent)?\.com/i.test(m[k] || '')) return m[k]; }
+            return '';
+        };
         const getTime  = m => g(m, ['Timestamp','timestamp','Registered','Date']);
 
         // ---------- STATS ----------
