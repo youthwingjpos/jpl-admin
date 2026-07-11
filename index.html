@@ -177,8 +177,6 @@
                     <option value="">All Roles</option>
                     <option value="Batsman">Batsman</option>
                     <option value="Bowler">Bowler</option>
-                    <option value="All Rounder">All Rounder</option>
-                    <option value="WK Keeper">WK Keeper</option>
                 </select>
                 <select id="filterSize" class="filter-select">
                     <option value="">All Sizes</option>
@@ -213,6 +211,7 @@
                         <th>Skills</th>
                         <th onclick="sortTable('tshirt')">T-Shirt ↕</th>
                         <th>Payment Ref</th>
+                        <th>Proof</th>
                         <th onclick="sortTable('timestamp')">Registered ↕</th>
                     </tr>
                 </thead>
@@ -364,6 +363,7 @@
         const getSkills= m => g(m, ['Skills','skills','Skills / Description','Description']);
         const getSize  = m => g(m, ['T-Shirt','Tshirt','T-Shirt Size','tshirt','Size']);
         const getRef   = m => g(m, ['Payment Ref','Payment Reference','paymentRef','Reference','UTR']);
+        const getShot  = m => g(m, ['Screenshot','screenshot','Proof','Payment Screenshot']);
         const getTime  = m => g(m, ['Timestamp','timestamp','Registered','Date']);
 
         // ---------- STATS ----------
@@ -502,6 +502,7 @@
                     '<td>' + esc(getSkills(m) || '-') + '</td>' +
                     '<td><span class="size-badge">' + esc(getSize(m) || '-') + '</span></td>' +
                     '<td class="ref-cell">' + esc(getRef(m) || '-') + '</td>' +
+                    '<td>' + (getShot(m) ? '<a href="' + esc(getShot(m)) + '" target="_blank" rel="noopener">🖼️ View</a>' : '-') + '</td>' +
                     '<td>' + esc(fmtDate(getTime(m))) + '</td>';
             });
             document.getElementById('resultsCount').textContent = 'Showing ' + filteredPlayers.length + ' of ' + allPlayers.length + ' players';
@@ -514,7 +515,7 @@
             return filteredPlayers.map(m => ({
                 UID: getUID(m), Name: getName(m), Phone: getPhone(m), DOB: getDOB(m), Age: getAge(m), Role: getRole(m),
                 Skills: getSkills(m), 'T-Shirt': getSize(m), Amount: AMOUNT_PER_PLAYER,
-                'Payment Ref': getRef(m), Registered: getTime(m)
+                'Payment Ref': getRef(m), Screenshot: getShot(m), Registered: getTime(m)
             }));
         }
         function exportToExcel() {
