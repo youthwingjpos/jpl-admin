@@ -74,6 +74,16 @@
         .role-badge { background: #dbeafe; color: #1e40af; }
         .size-badge { background: #f3f4f6; color: #374151; }
         .ref-cell { font-family: monospace; font-size: 0.85em; color: var(--gray-700); }
+        .proof-thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 6px; border: 1px solid var(--gray-200); cursor: pointer; transition: transform 0.15s; background: var(--gray-100); }
+        .proof-thumb:hover { transform: scale(1.1); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .proof-link { color: var(--secondary); font-weight: 600; }
+
+        /* Screenshot lightbox */
+        .lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; padding: 30px; }
+        .lightbox.show { display: flex; }
+        .lightbox img { max-width: 92vw; max-height: 88vh; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.6); background: #fff; }
+        .lightbox-close { position: absolute; top: 14px; right: 26px; color: #fff; font-size: 2.4em; line-height: 1; cursor: pointer; font-weight: 700; }
+        .lightbox-open { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); color: #fff; font-size: 0.9em; text-decoration: underline; }
 
         .loading { text-align: center; padding: 40px; color: var(--gray-600); }
         .spinner { border: 4px solid var(--gray-200); border-top: 4px solid var(--primary); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto 20px; }
@@ -249,6 +259,13 @@
         </div>
 
         <datalist id="playerNames"></datalist>
+    </div>
+
+    <!-- Screenshot lightbox -->
+    <div class="lightbox" id="lightbox" onclick="if(event.target===this)closeLightbox()">
+        <span class="lightbox-close" onclick="closeLightbox()">&times;</span>
+        <img id="lightboxImg" src="" alt="Payment screenshot">
+        <a id="lightboxOpen" class="lightbox-open" href="#" target="_blank" rel="noopener">Open original in Drive ↗</a>
     </div>
 
     <script>
@@ -502,12 +519,35 @@
                     '<td>' + esc(getSkills(m) || '-') + '</td>' +
                     '<td><span class="size-badge">' + esc(getSize(m) || '-') + '</span></td>' +
                     '<td class="ref-cell">' + esc(getRef(m) || '-') + '</td>' +
-                    '<td>' + (getShot(m) ? '<a href="' + esc(getShot(m)) + '" target="_blank" rel="noopener">🖼️ View</a>' : '-') + '</td>' +
+                    '<td>' + proofCell(getShot(m)) + '</td>' +
                     '<td>' + esc(fmtDate(getTime(m))) + '</td>';
             });
             document.getElementById('resultsCount').textContent = 'Showing ' + filteredPlayers.length + ' of ' + allPlayers.length + ' players';
         }
         function esc(s) { return (s == null ? '' : String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+        // ---------- SCREENSHOT PROOF ----------
+        function driveFileId(url) { const m = String(url || '').match(/[-\w]{25,}/); return m ? m[0] : ''; }
+        function driveThumb(url, size) { const id = driveFileId(url); return id ? 'https://drive.google.com/thumbnail?id=' + id + '&sz=w' + (size || 200) : url; }
+        function proofCell(url) {
+            if (!url) return '-';
+            const safe = esc(url), thumb = esc(driveThumb(url, 120));
+            // Thumbnail opens the lightbox; if the image can't load, fall back to a plain link.
+            return '<img class="proof-thumb" src="' + thumb + '" alt="proof" ' +
+                'onclick="openLightbox(\'' + safe + '\')" ' +
+                'onerror="this.outerHTML=&quot;<a class=\'proof-link\' href=\'' + safe + '\' target=_blank rel=noopener>🖼️ View</a>&quot;">';
+        }
+        function openLightbox(url) {
+            const id = driveFileId(url);
+            document.getElementById('lightboxImg').src = id ? 'https://drive.google.com/thumbnail?id=' + id + '&sz=w1600' : url;
+            document.getElementById('lightboxOpen').href = url;
+            document.getElementById('lightbox').classList.add('show');
+        }
+        function closeLightbox() {
+            document.getElementById('lightbox').classList.remove('show');
+            document.getElementById('lightboxImg').src = '';
+        }
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
         function fmtDate(iso) { if (!iso) return '-'; const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleDateString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }); }
 
         // ---------- EXPORT / COPY ----------
