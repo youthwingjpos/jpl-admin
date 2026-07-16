@@ -74,6 +74,9 @@
         .role-badge { background: #dbeafe; color: #1e40af; }
         .size-badge { background: #f3f4f6; color: #374151; }
         .ref-cell { font-family: monospace; font-size: 0.85em; color: var(--gray-700); }
+        .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.8em; font-weight: 700; white-space: nowrap; }
+        .status-badge.confirmed { background: #d1fae5; color: #065f46; }
+        .status-badge.waiting { background: #fef3c7; color: #92400e; }
         .proof-thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 6px; border: 1px solid var(--gray-200); cursor: pointer; transition: transform 0.15s; background: var(--gray-100); }
         .proof-thumb:hover { transform: scale(1.1); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
         .proof-link { color: var(--secondary); font-weight: 600; }
@@ -167,7 +170,7 @@
 
         <div id="viewRegistrations">
         <div class="stats-grid">
-            <div class="stat-card"><div class="stat-icon green">👥</div><div class="stat-info"><h3 id="statTotal">0</h3><p>Total Registrations</p></div></div>
+            <div class="stat-card"><div class="stat-icon green">👥</div><div class="stat-info"><h3 id="statTotal">0</h3><p>Total Registrations</p><p id="statBreakdown" style="font-size:0.82em;color:var(--gray-600);margin-top:3px;font-weight:600;"></p></div></div>
             <div class="stat-card"><div class="stat-icon yellow">💰</div><div class="stat-info"><h3 id="statCollected">₹0</h3><p>Amount Collected</p></div></div>
             <div class="stat-card"><div class="stat-icon blue">🏏</div><div class="stat-info"><h3 id="statTopRole">--</h3><p>Most Common Role</p></div></div>
             <div class="stat-card"><div class="stat-icon purple">👕</div><div class="stat-info"><h3 id="statTopSize">--</h3><p>Most Common Size</p></div></div>
@@ -213,6 +216,7 @@
             <table id="playersTable" style="display:none;">
                 <thead>
                     <tr>
+                        <th onclick="sortTable('status')">Status ↕</th>
                         <th onclick="sortTable('uid')">UID ↕</th>
                         <th onclick="sortTable('name')">Name ↕</th>
                         <th onclick="sortTable('phone')">Phone ↕</th>
@@ -381,6 +385,8 @@
         const getSkills= m => g(m, ['Skills','skills','Skills / Description','Description']);
         const getSize  = m => g(m, ['T-Shirt','Tshirt','T-Shirt Size','tshirt','Size']);
         const getRef   = m => g(m, ['Payment Ref','Payment Reference','paymentRef','Reference','UTR']);
+        const getStatus = m => g(m, ['Status','status']);
+        const getWaitNo = m => g(m, ['Waiting No','Waiting Number','waitingNo','Waitlist No']);
         const getShot  = m => {
             const named = g(m, ['Screenshot','screenshot','Proof','Payment Screenshot']);
             if (named) return named;
@@ -393,6 +399,9 @@
         // ---------- STATS ----------
         function updateStats() {
             document.getElementById('statTotal').textContent = allPlayers.length;
+            const waitingCount = allPlayers.filter(isWaiting).length;
+            document.getElementById('statBreakdown').textContent =
+                (allPlayers.length - waitingCount) + ' confirmed · ' + waitingCount + ' waiting';
             document.getElementById('statCollected').textContent = '₹' + (allPlayers.length * AMOUNT_PER_PLAYER).toLocaleString('en-IN');
             document.getElementById('statTopRole').textContent = mode(allPlayers.map(getRole)) || '--';
             document.getElementById('statTopSize').textContent = mode(allPlayers.map(getSize)) || '--';
@@ -456,7 +465,7 @@
                 if (currentSort.field === field) currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
                 else { currentSort.field = field; currentSort.order = 'asc'; }
             }
-            const get = { uid:getUID, name:getName, phone:getPhone, dob:getDOB, age:getAge, role:getRole, tshirt:getSize, timestamp:getTime }[field] || getTime;
+            const get = { uid:getUID, name:getName, phone:getPhone, dob:getDOB, age:getAge, role:getRole, tshirt:getSize, status:getStatus, timestamp:getTime }[field] || getTime;
             filteredPlayers.sort((a, b) => {
                 let av = get(a), bv = get(b);
                 if (field === 'age') { av = parseInt(av)||0; bv = parseInt(bv)||0; }
@@ -517,6 +526,7 @@
             filteredPlayers.forEach(m => {
                 const tr = tbody.insertRow();
                 tr.innerHTML =
+                    '<td>' + statusCell(m) + '</td>' +
                     '<td><strong>' + esc(getUID(m)) + '</strong></td>' +
                     '<td>' + esc(getName(m) || '-') + '</td>' +
                     '<td>' + esc(getPhone(m)) + '</td>' +
@@ -532,6 +542,18 @@
             document.getElementById('resultsCount').textContent = 'Showing ' + filteredPlayers.length + ' of ' + allPlayers.length + ' players';
         }
         function esc(s) { return (s == null ? '' : String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+        // ---------- STATUS / WAITING LIST ----------
+        // Rows registered before the waiting list existed have a blank Status; they were
+        // all within capacity, so treat them as Confirmed rather than showing "-".
+        function isWaiting(m) { return /wait/i.test(getStatus(m) || ''); }
+        function statusCell(m) {
+            if (isWaiting(m)) {
+                const n = getWaitNo(m);
+                return '<span class="status-badge waiting">Waiting' + (n ? ' #' + esc(n) : '') + '</span>';
+            }
+            return '<span class="status-badge confirmed">Confirmed</span>';
+        }
 
         // ---------- SCREENSHOT PROOF ----------
         function driveFileId(url) { const m = String(url || '').match(/[-\w]{25,}/); return m ? m[0] : ''; }
@@ -560,6 +582,7 @@
         // ---------- EXPORT / COPY ----------
         function rowsForExport() {
             return filteredPlayers.map(m => ({
+                Status: isWaiting(m) ? 'Waiting List' : 'Confirmed', 'Waiting No': getWaitNo(m),
                 UID: getUID(m), Name: getName(m), Phone: getPhone(m), DOB: getDOB(m), Age: getAge(m), Role: getRole(m),
                 Skills: getSkills(m), 'T-Shirt': getSize(m), Amount: AMOUNT_PER_PLAYER,
                 'Payment Ref': getRef(m), Screenshot: getShot(m), Registered: getTime(m)
