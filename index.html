@@ -52,7 +52,7 @@
         .stat-info p { color: var(--gray-600); font-size: 0.9em; }
 
         .controls-panel { background: white; padding: 22px 25px; border-radius: 15px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .search-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 15px; margin-bottom: 15px; }
+        .search-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 15px; margin-bottom: 15px; }
         .search-input, .filter-select { padding: 12px 15px; border: 2px solid var(--gray-200); border-radius: 8px; font-size: 0.95em; }
         .search-input:focus, .filter-select:focus { outline: none; border-color: var(--primary); }
         .btn { padding: 12px 22px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.3s; font-size: 0.9em; }
@@ -77,6 +77,7 @@
         .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.8em; font-weight: 700; white-space: nowrap; }
         .status-badge.confirmed { background: #d1fae5; color: #065f46; }
         .status-badge.waiting { background: #fef3c7; color: #92400e; }
+        .club-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.78em; font-weight: 600; white-space: nowrap; background: #e0e7ff; color: #3730a3; }
         .proof-thumb { width: 46px; height: 46px; object-fit: cover; border-radius: 6px; border: 1px solid var(--gray-200); cursor: pointer; transition: transform 0.15s; background: var(--gray-100); }
         .proof-thumb:hover { transform: scale(1.1); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
         .proof-link { color: var(--secondary); font-weight: 600; }
@@ -183,6 +184,13 @@
             <div class="size-totals" id="sizeTotals"></div>
         </div>
 
+        <div class="table-container" style="padding: 20px 25px;">
+            <div class="table-header" style="margin-bottom: 14px;">
+                <h2 style="font-size: 1.2em;">🎂 Age Brackets</h2>
+            </div>
+            <div class="size-totals" id="ageTotals"></div>
+        </div>
+
         <div class="controls-panel">
             <div class="search-row">
                 <input type="text" id="searchInput" class="search-input" placeholder="🔍 Search by UID, phone, skills...">
@@ -196,6 +204,14 @@
                     <option value="S">S</option><option value="M">M</option><option value="L">L</option>
                     <option value="XL">XL</option><option value="XXL">XXL</option>
                     <option value="3XL">3XL</option><option value="4XL">4XL</option>
+                </select>
+                <select id="filterAge" class="filter-select">
+                    <option value="">All Ages</option>
+                    <option value="Under 25">Under 25</option>
+                    <option value="25–35">25–35</option>
+                    <option value="35–45">35–45</option>
+                    <option value="45–50">45–50</option>
+                    <option value="50+">50+</option>
                 </select>
                 <button onclick="clearFilters()" class="btn btn-secondary">Clear</button>
             </div>
@@ -217,6 +233,7 @@
                 <thead>
                     <tr>
                         <th onclick="sortTable('status')">Status ↕</th>
+                        <th onclick="sortTable('club')">Club ↕</th>
                         <th onclick="sortTable('uid')">UID ↕</th>
                         <th onclick="sortTable('name')">Name ↕</th>
                         <th onclick="sortTable('phone')">Phone ↕</th>
@@ -250,7 +267,7 @@
         <div id="viewTeams" style="display:none;">
             <div class="table-container">
                 <div class="teams-toolbar">
-                    <h2 style="font-size: 1.3em; color: var(--gray-900);">🏏 Team Builder — 8 Teams × 8 Players</h2>
+                    <h2 style="font-size: 1.3em; color: var(--gray-900);">🏏 Team Builder — 10 Teams × 8 Players</h2>
                     <div style="display: flex; gap: 12px; align-items: center;">
                         <span class="save-status" id="teamsSaveStatus"></span>
                         <button onclick="saveTeams()" class="btn btn-success">💾 Save Teams</button>
@@ -385,6 +402,9 @@
         const getSkills= m => g(m, ['Skills','skills','Skills / Description','Description']);
         const getSize  = m => g(m, ['T-Shirt','Tshirt','T-Shirt Size','tshirt','Size']);
         const getRef   = m => g(m, ['Payment Ref','Payment Reference','paymentRef','Reference','UTR']);
+        // Rows written before the JPOSMAIN form existed have no Club value; they all
+        // came from the UID form, so treat a blank as 'Youth Wing'.
+        const getClub  = m => g(m, ['Club','club']) || 'Youth Wing';
         const getStatus = m => g(m, ['Status','status']);
         const getWaitNo = m => g(m, ['Waiting No','Waiting Number','waitingNo','Waitlist No']);
         const getShot  = m => {
@@ -406,6 +426,7 @@
             document.getElementById('statTopRole').textContent = mode(allPlayers.map(getRole)) || '--';
             document.getElementById('statTopSize').textContent = mode(allPlayers.map(getSize)) || '--';
             renderSizeTotals();
+            renderAgeTotals();
             updatePlayerDatalist();
             if (teamsBuilt) refreshTeamRoles();
         }
@@ -423,6 +444,20 @@
             el.innerHTML = all.map(s => '<div class="size-pill">' + esc(s) + ' - <span>' + counts[s] + '</span></div>').join('') +
                 '<div class="size-pill" style="background:var(--primary);color:#fff;">Total - ' + allPlayers.length + '</div>';
         }
+        function renderAgeTotals() {
+            const el = document.getElementById('ageTotals');
+            if (!el) return;
+            const counts = {};
+            let noAge = 0;
+            allPlayers.forEach(m => { const b = ageBracket(m); if (b) counts[b] = (counts[b] || 0) + 1; else noAge++; });
+            const pills = AGE_BRACKETS.filter(b => counts[b.label])
+                .map(b => '<div class="size-pill">' + b.label + ' - <span>' + counts[b.label] + '</span></div>');
+            if (noAge) pills.push('<div class="size-pill">No age - <span>' + noAge + '</span></div>');
+            el.innerHTML = pills.length
+                ? pills.join('') + '<div class="size-pill" style="background:var(--primary);color:#fff;">Total - ' + allPlayers.length + '</div>'
+                : '<div style="color:#9ca3af;">No ages yet.</div>';
+        }
+
         function mode(arr) {
             const c = {}; let best = '', n = 0;
             arr.filter(Boolean).forEach(v => { c[v] = (c[v]||0)+1; if (c[v] > n) { n = c[v]; best = v; } });
@@ -434,11 +469,13 @@
             const s = document.getElementById('searchInput').value.toLowerCase();
             const role = document.getElementById('filterRole').value;
             const size = document.getElementById('filterSize').value;
+            const age  = document.getElementById('filterAge').value;
             filteredPlayers = allPlayers.filter(m => {
                 if (role && getRole(m) !== role) return false;
                 if (size && getSize(m) !== size) return false;
+                if (age && ageBracket(m) !== age) return false;
                 if (s) {
-                    const hay = [getUID(m), getName(m), getPhone(m), getSkills(m), getRole(m), getRef(m)].join(' ').toLowerCase();
+                    const hay = [getUID(m), getName(m), getPhone(m), getSkills(m), getRole(m), getRef(m), getClub(m)].join(' ').toLowerCase();
                     if (!hay.includes(s)) return false;
                 }
                 return true;
@@ -449,10 +486,11 @@
             document.getElementById('searchInput').value = '';
             document.getElementById('filterRole').value = '';
             document.getElementById('filterSize').value = '';
+            document.getElementById('filterAge').value = '';
             filteredPlayers = [...allPlayers];
             renderTable();
         }
-        ['searchInput','filterRole','filterSize'].forEach(id => {
+        ['searchInput','filterRole','filterSize','filterAge'].forEach(id => {
             document.addEventListener('DOMContentLoaded', () => {
                 const el = document.getElementById(id);
                 el.addEventListener('change', applyFilters);
@@ -465,7 +503,7 @@
                 if (currentSort.field === field) currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
                 else { currentSort.field = field; currentSort.order = 'asc'; }
             }
-            const get = { uid:getUID, name:getName, phone:getPhone, dob:getDOB, age:getAge, role:getRole, tshirt:getSize, status:getStatus, timestamp:getTime }[field] || getTime;
+            const get = { uid:getUID, name:getName, phone:getPhone, dob:getDOB, age:getAge, role:getRole, tshirt:getSize, status:getStatus, club:getClub, timestamp:getTime }[field] || getTime;
             filteredPlayers.sort((a, b) => {
                 let av = get(a), bv = get(b);
                 if (field === 'age') { av = parseInt(av)||0; bv = parseInt(bv)||0; }
@@ -527,7 +565,8 @@
                 const tr = tbody.insertRow();
                 tr.innerHTML =
                     '<td>' + statusCell(m) + '</td>' +
-                    '<td><strong>' + esc(getUID(m)) + '</strong></td>' +
+                    '<td><span class="club-badge">' + esc(getClub(m)) + '</span></td>' +
+                    '<td><strong>' + esc(getUID(m) || '–') + '</strong></td>' +
                     '<td>' + esc(getName(m) || '-') + '</td>' +
                     '<td>' + esc(getPhone(m)) + '</td>' +
                     '<td>' + esc(getDOB(m) || '-') + '</td>' +
@@ -542,6 +581,23 @@
             document.getElementById('resultsCount').textContent = 'Showing ' + filteredPlayers.length + ' of ' + allPlayers.length + ' players';
         }
         function esc(s) { return (s == null ? '' : String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+        // ---------- AGE BRACKETS ----------
+        // Bands are inclusive of min, exclusive of the next band's min, so an age of
+        // exactly 35 lands in '35–45' only — never counted twice.
+        const AGE_BRACKETS = [
+            { label: 'Under 25', min: 0,  max: 24 },
+            { label: '25–35',    min: 25, max: 34 },
+            { label: '35–45',    min: 35, max: 44 },
+            { label: '45–50',    min: 45, max: 49 },
+            { label: '50+',      min: 50, max: 999 }
+        ];
+        function ageBracket(m) {
+            const a = parseInt(getAge(m), 10);
+            if (!Number.isFinite(a) || a <= 0) return '';
+            const b = AGE_BRACKETS.find(b => a >= b.min && a <= b.max);
+            return b ? b.label : '';
+        }
 
         // ---------- STATUS / WAITING LIST ----------
         // Rows registered before the waiting list existed have a blank Status; they were
@@ -583,7 +639,8 @@
         function rowsForExport() {
             return filteredPlayers.map(m => ({
                 Status: isWaiting(m) ? 'Waiting List' : 'Confirmed', 'Waiting No': getWaitNo(m),
-                UID: getUID(m), Name: getName(m), Phone: getPhone(m), DOB: getDOB(m), Age: getAge(m), Role: getRole(m),
+                Club: getClub(m), UID: getUID(m), Name: getName(m), Phone: getPhone(m), DOB: getDOB(m),
+                Age: getAge(m), 'Age Bracket': ageBracket(m), Role: getRole(m),
                 Skills: getSkills(m), 'T-Shirt': getSize(m), Amount: AMOUNT_PER_PLAYER,
                 'Payment Ref': getRef(m), Screenshot: getShot(m), Registered: getTime(m)
             }));
@@ -631,7 +688,7 @@
             }
         }
 
-        const TEAM_COUNT = 8, SLOT_COUNT = 8;
+        const TEAM_COUNT = 10, SLOT_COUNT = 8;   // 10 teams × 8 players = the 80 confirmed spots
         let teamsBuilt = false;
         let teamsData = null;
 
