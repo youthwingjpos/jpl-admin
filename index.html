@@ -167,6 +167,7 @@
         <div class="tab-bar">
             <button class="tab-btn active" id="tabRegBtn" onclick="switchTab('registrations')">📋 Registrations</button>
             <button class="tab-btn" id="tabTeamsBtn" onclick="switchTab('teams')">🏏 Teams</button>
+            <button class="tab-btn" id="tabMahilaBtn" onclick="switchTab('mahila')">🌸 Mahila</button>
         </div>
 
         <div id="viewRegistrations">
@@ -280,6 +281,63 @@
             </div>
         </div>
 
+        <div id="viewMahila" style="display:none;">
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-icon purple">🌸</div><div class="stat-info"><h3 id="mStatTotal">0</h3><p>Mahila Registrations</p></div></div>
+                <div class="stat-card"><div class="stat-icon yellow">💰</div><div class="stat-info"><h3 id="mStatCollected">₹0</h3><p>Amount Collected</p></div></div>
+            </div>
+
+            <div class="table-container" style="padding: 20px 25px;">
+                <div class="table-header" style="margin-bottom: 14px;"><h2 style="font-size: 1.2em;">🎂 Age Brackets</h2></div>
+                <div class="size-totals" id="mAgeTotals"></div>
+            </div>
+
+            <div class="controls-panel">
+                <div class="search-row" style="grid-template-columns: 2fr 1fr auto;">
+                    <input type="text" id="mSearchInput" class="search-input" placeholder="🔍 Search by UID, name, phone...">
+                    <select id="mFilterAge" class="filter-select">
+                        <option value="">All Ages</option>
+                        <option value="Under 25">Under 25</option>
+                        <option value="25–35">25–35</option>
+                        <option value="35–45">35–45</option>
+                        <option value="45–50">45–50</option>
+                        <option value="50+">50+</option>
+                    </select>
+                    <button onclick="mClearFilters()" class="btn btn-secondary">Clear</button>
+                </div>
+                <div class="action-buttons">
+                    <button onclick="mExportExcel()" class="btn btn-success">📥 Export Excel</button>
+                    <button onclick="mCopyPhones()" class="btn btn-primary">📱 Copy Phone List</button>
+                    <button onclick="loadMahila()" class="refresh-btn">🔄 Refresh</button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <div class="table-header">
+                    <h2>🌸 Mahila Parishad — Registrations</h2>
+                    <div id="mResultsCount">Showing 0</div>
+                </div>
+                <div id="mLoading" class="loading"><div class="spinner"></div><p>Loading…</p></div>
+                <table id="mTable" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th onclick="mSort('uid')">UID ↕</th>
+                            <th onclick="mSort('name')">Name ↕</th>
+                            <th onclick="mSort('phone')">Phone ↕</th>
+                            <th onclick="mSort('dob')">DOB ↕</th>
+                            <th onclick="mSort('age')">Age ↕</th>
+                            <th>Bracket</th>
+                            <th>Payment Ref</th>
+                            <th>Proof</th>
+                            <th onclick="mSort('timestamp')">Registered ↕</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mTableBody"></tbody>
+                </table>
+                <div id="mEmpty" class="empty-state" style="display:none;"><div class="big">🌸</div><p id="mEmptyText">No registrations yet.</p></div>
+            </div>
+        </div>
+
         <datalist id="playerNames"></datalist>
     </div>
 
@@ -299,6 +357,10 @@
         // sheet must be shared "Anyone with the link → Viewer".
         const MEMBER_DATA_CSV = "https://docs.google.com/spreadsheets/d/1yllfr4bB-vhakCkgvhQuVurSnSUp76nrNIOpW23SwTU/gviz/tq?tqx=out:csv&gid=0";
         const AMOUNT_PER_PLAYER = 200;
+        // Mahila Parishad registrations live in their OWN spreadsheet. Paste its ID here
+        // (the long code in its URL: docs.google.com/spreadsheets/d/<THIS_BIT>/edit) and
+        // share that sheet "Anyone with the link → Viewer" so this dashboard can read it.
+        const MAHILA_SHEET_ID = "1VSEL6flO1s9IdjXTorplfAgIj-Q6lEJ_5EJLoJWiRGo";
         // Reads/saves the 8 teams. TEAMS_CSV reads the "Teams" tab; saving the
         // teams needs the same Apps Script /exec URL the form uses.
         const TEAMS_CSV = "https://docs.google.com/spreadsheets/d/1yllfr4bB-vhakCkgvhQuVurSnSUp76nrNIOpW23SwTU/gviz/tq?tqx=out:csv&sheet=Teams";
@@ -497,6 +559,13 @@
                 if (id === 'searchInput') el.addEventListener('keyup', applyFilters);
             });
         });
+        ['mSearchInput','mFilterAge'].forEach(id => {
+            document.addEventListener('DOMContentLoaded', () => {
+                const el = document.getElementById(id);
+                el.addEventListener('change', mApplyFilters);
+                if (id === 'mSearchInput') el.addEventListener('keyup', mApplyFilters);
+            });
+        });
 
         function sortTable(field, keepOrder) {
             if (!keepOrder) {
@@ -677,15 +746,154 @@
         // TABS + TEAM BUILDER
         // ============================================================
         function switchTab(tab) {
-            const reg = tab === 'registrations';
-            document.getElementById('viewRegistrations').style.display = reg ? 'block' : 'none';
-            document.getElementById('viewTeams').style.display = reg ? 'none' : 'block';
-            document.getElementById('tabRegBtn').classList.toggle('active', reg);
-            document.getElementById('tabTeamsBtn').classList.toggle('active', !reg);
-            if (!reg) {
+            document.getElementById('viewRegistrations').style.display = tab === 'registrations' ? 'block' : 'none';
+            document.getElementById('viewTeams').style.display        = tab === 'teams'         ? 'block' : 'none';
+            document.getElementById('viewMahila').style.display       = tab === 'mahila'        ? 'block' : 'none';
+            document.getElementById('tabRegBtn').classList.toggle('active', tab === 'registrations');
+            document.getElementById('tabTeamsBtn').classList.toggle('active', tab === 'teams');
+            document.getElementById('tabMahilaBtn').classList.toggle('active', tab === 'mahila');
+
+            if (tab === 'teams') {
                 if (!teamsBuilt) initTeams();
                 else { updatePlayerDatalist(); refreshTeamRoles(); }
+            } else if (tab === 'mahila' && !mahilaLoaded) {
+                loadMahila();
             }
+        }
+
+        // ============================================================
+        // MAHILA PARISHAD TAB — reads its own separate spreadsheet
+        // ============================================================
+        let mahilaAll = [], mahilaFiltered = [], mahilaLoaded = false;
+        let mSortState = { field: 'timestamp', order: 'desc' };
+
+        async function loadMahila() {
+            const loading = document.getElementById('mLoading');
+            const table = document.getElementById('mTable');
+            const empty = document.getElementById('mEmpty');
+            loading.style.display = 'block'; table.style.display = 'none'; empty.style.display = 'none';
+
+            if (!MAHILA_SHEET_ID || MAHILA_SHEET_ID.indexOf('PASTE_') === 0) {
+                loading.style.display = 'none'; empty.style.display = 'block';
+                document.getElementById('mEmptyText').textContent =
+                    'Mahila sheet not configured yet — set MAHILA_SHEET_ID in index.html.';
+                return;
+            }
+            try {
+                const url = 'https://docs.google.com/spreadsheets/d/' + MAHILA_SHEET_ID +
+                            '/gviz/tq?tqx=out:csv&cachebust=' + Date.now();
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('HTTP ' + res.status + ' — is the sheet shared "Anyone with the link"?');
+                mahilaAll = parseCSV(await res.text());
+                mahilaFiltered = [...mahilaAll];
+                mahilaLoaded = true;
+                mSort(mSortState.field, true);
+                mUpdateStats(); mRender();
+            } catch (err) {
+                console.error(err);
+                loading.style.display = 'none'; empty.style.display = 'block';
+                document.getElementById('mEmptyText').textContent = 'Error loading Mahila sheet: ' + err.message;
+            }
+        }
+
+        function mUpdateStats() {
+            document.getElementById('mStatTotal').textContent = mahilaAll.length;
+            document.getElementById('mStatCollected').textContent =
+                '₹' + (mahilaAll.length * AMOUNT_PER_PLAYER).toLocaleString('en-IN');
+            const el = document.getElementById('mAgeTotals');
+            const counts = {}; let noAge = 0;
+            mahilaAll.forEach(m => { const b = ageBracket(m); if (b) counts[b] = (counts[b] || 0) + 1; else noAge++; });
+            const pills = AGE_BRACKETS.filter(b => counts[b.label])
+                .map(b => '<div class="size-pill">' + b.label + ' - <span>' + counts[b.label] + '</span></div>');
+            if (noAge) pills.push('<div class="size-pill">No age - <span>' + noAge + '</span></div>');
+            el.innerHTML = pills.length
+                ? pills.join('') + '<div class="size-pill" style="background:var(--primary);color:#fff;">Total - ' + mahilaAll.length + '</div>'
+                : '<div style="color:#9ca3af;">No ages yet.</div>';
+        }
+
+        function mApplyFilters() {
+            const s = document.getElementById('mSearchInput').value.toLowerCase();
+            const age = document.getElementById('mFilterAge').value;
+            mahilaFiltered = mahilaAll.filter(m => {
+                if (age && ageBracket(m) !== age) return false;
+                if (s) {
+                    const hay = [getUID(m), getName(m), getPhone(m), getRef(m)].join(' ').toLowerCase();
+                    if (!hay.includes(s)) return false;
+                }
+                return true;
+            });
+            mRender();
+        }
+        function mClearFilters() {
+            document.getElementById('mSearchInput').value = '';
+            document.getElementById('mFilterAge').value = '';
+            mahilaFiltered = [...mahilaAll];
+            mRender();
+        }
+
+        function mSort(field, keepOrder) {
+            if (!keepOrder) {
+                if (mSortState.field === field) mSortState.order = mSortState.order === 'asc' ? 'desc' : 'asc';
+                else { mSortState.field = field; mSortState.order = 'asc'; }
+            }
+            const get = { uid:getUID, name:getName, phone:getPhone, dob:getDOB, age:getAge, timestamp:getTime }[field] || getTime;
+            mahilaFiltered.sort((a, b) => {
+                let av = get(a), bv = get(b);
+                if (field === 'age') { av = parseInt(av) || 0; bv = parseInt(bv) || 0; }
+                else { av = (av || '').toString().toLowerCase(); bv = (bv || '').toString().toLowerCase(); }
+                if (av === bv) return 0;
+                return (mSortState.order === 'asc' ? 1 : -1) * (av > bv ? 1 : -1);
+            });
+            if (!keepOrder) mRender();
+        }
+
+        function mRender() {
+            const loading = document.getElementById('mLoading');
+            const table = document.getElementById('mTable');
+            const empty = document.getElementById('mEmpty');
+            const tbody = document.getElementById('mTableBody');
+            loading.style.display = 'none';
+            if (!mahilaFiltered.length) {
+                table.style.display = 'none'; empty.style.display = 'block';
+                document.getElementById('mEmptyText').textContent =
+                    mahilaAll.length ? 'No one matches your filters.' : 'No registrations yet.';
+                document.getElementById('mResultsCount').textContent = 'Showing 0';
+                return;
+            }
+            empty.style.display = 'none'; table.style.display = 'table';
+            tbody.innerHTML = '';
+            mahilaFiltered.forEach(m => {
+                tbody.insertRow().innerHTML =
+                    '<td><strong>' + esc(getUID(m)) + '</strong></td>' +
+                    '<td>' + esc(getName(m) || '-') + '</td>' +
+                    '<td>' + esc(getPhone(m)) + '</td>' +
+                    '<td>' + esc(getDOB(m) || '-') + '</td>' +
+                    '<td>' + esc(getAge(m)) + '</td>' +
+                    '<td><span class="size-badge">' + esc(ageBracket(m) || '-') + '</span></td>' +
+                    '<td class="ref-cell">' + esc(getRef(m) || '-') + '</td>' +
+                    '<td>' + proofCell(getShot(m)) + '</td>' +
+                    '<td>' + esc(fmtDate(getTime(m))) + '</td>';
+            });
+            document.getElementById('mResultsCount').textContent =
+                'Showing ' + mahilaFiltered.length + ' of ' + mahilaAll.length;
+        }
+
+        function mExportExcel() {
+            const rows = mahilaFiltered.map(m => ({
+                UID: getUID(m), Name: getName(m), Phone: getPhone(m), DOB: getDOB(m),
+                Age: getAge(m), 'Age Bracket': ageBracket(m), Amount: AMOUNT_PER_PLAYER,
+                'Payment Ref': getRef(m), Screenshot: getShot(m), Registered: getTime(m)
+            }));
+            if (!rows.length) return alert('No data to export.');
+            const ws = XLSX.utils.json_to_sheet(rows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Mahila');
+            XLSX.writeFile(wb, 'Mahila_Parishad_Registrations.xlsx');
+        }
+        function mCopyPhones() {
+            const nums = mahilaFiltered.map(getPhone).filter(Boolean).join('\n');
+            if (!nums) return alert('No phone numbers to copy.');
+            navigator.clipboard.writeText(nums).then(() => alert('Copied ' + nums.split('\n').length + ' phone numbers.'));
         }
 
         const TEAM_COUNT = 10, SLOT_COUNT = 8;   // 10 teams × 8 players = the 80 confirmed spots
