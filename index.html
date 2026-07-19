@@ -244,6 +244,7 @@
                         <th>Skills</th>
                         <th onclick="sortTable('tshirt')">T-Shirt ↕</th>
                         <th>Payment Ref</th>
+                        <th>Refund UPI</th>
                         <th>Proof</th>
                         <th onclick="sortTable('timestamp')">Registered ↕</th>
                     </tr>
@@ -357,6 +358,8 @@
         // sheet must be shared "Anyone with the link → Viewer".
         const MEMBER_DATA_CSV = "https://docs.google.com/spreadsheets/d/1yllfr4bB-vhakCkgvhQuVurSnSUp76nrNIOpW23SwTU/gviz/tq?tqx=out:csv&gid=0";
         const AMOUNT_PER_PLAYER = 200;
+        // Per-club capacities — must match CAPACITY_YOUTH / CAPACITY_JPOSMAIN in apps-script.gs
+        const CAPACITY_YOUTH = 70, CAPACITY_JPOSMAIN = 20;
         // Mahila Parishad registrations live in their OWN spreadsheet. Paste its ID here
         // (the long code in its URL: docs.google.com/spreadsheets/d/<THIS_BIT>/edit) and
         // share that sheet "Anyone with the link → Viewer" so this dashboard can read it.
@@ -467,8 +470,10 @@
         // Rows written before the JPOSMAIN form existed have no Club value; they all
         // came from the UID form, so treat a blank as 'Youth Wing'.
         const getClub  = m => g(m, ['Club','club']) || 'Youth Wing';
+        const sameClub = (a, b) => String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
         const getStatus = m => g(m, ['Status','status']);
         const getWaitNo = m => g(m, ['Waiting No','Waiting Number','waitingNo','Waitlist No']);
+        const getRefund = m => g(m, ['Refund UPI','Refund Upi','refundUpi','Refund']);
         const getShot  = m => {
             const named = g(m, ['Screenshot','screenshot','Proof','Payment Screenshot']);
             if (named) return named;
@@ -482,8 +487,14 @@
         function updateStats() {
             document.getElementById('statTotal').textContent = allPlayers.length;
             const waitingCount = allPlayers.filter(isWaiting).length;
-            document.getElementById('statBreakdown').textContent =
-                (allPlayers.length - waitingCount) + ' confirmed · ' + waitingCount + ' waiting';
+            // Each club has its own quota and its own waiting list.
+            const yTotal = allPlayers.filter(m => !sameClub(getClub(m), 'JPOSMAIN')).length;
+            const jTotal = allPlayers.filter(m =>  sameClub(getClub(m), 'JPOSMAIN')).length;
+            const left = (n, cap) => n >= cap ? (n - cap) + ' waiting' : (cap - n) + ' left';
+            document.getElementById('statBreakdown').innerHTML =
+                (allPlayers.length - waitingCount) + ' confirmed · ' + waitingCount + ' waiting<br>' +
+                'Youth Wing ' + Math.min(yTotal, CAPACITY_YOUTH) + '/' + CAPACITY_YOUTH + ' (' + left(yTotal, CAPACITY_YOUTH) + ')<br>' +
+                'JPOSMAIN ' + Math.min(jTotal, CAPACITY_JPOSMAIN) + '/' + CAPACITY_JPOSMAIN + ' (' + left(jTotal, CAPACITY_JPOSMAIN) + ')';
             document.getElementById('statCollected').textContent = '₹' + (allPlayers.length * AMOUNT_PER_PLAYER).toLocaleString('en-IN');
             document.getElementById('statTopRole').textContent = mode(allPlayers.map(getRole)) || '--';
             document.getElementById('statTopSize').textContent = mode(allPlayers.map(getSize)) || '--';
@@ -644,6 +655,7 @@
                     '<td>' + esc(getSkills(m) || '-') + '</td>' +
                     '<td><span class="size-badge">' + esc(getSize(m) || '-') + '</span></td>' +
                     '<td class="ref-cell">' + esc(getRef(m) || '-') + '</td>' +
+                    '<td class="ref-cell">' + esc(getRefund(m) || '–') + '</td>' +
                     '<td>' + proofCell(getShot(m)) + '</td>' +
                     '<td>' + esc(fmtDate(getTime(m))) + '</td>';
             });
@@ -711,7 +723,7 @@
                 Club: getClub(m), UID: getUID(m), Name: getName(m), Phone: getPhone(m), DOB: getDOB(m),
                 Age: getAge(m), 'Age Bracket': ageBracket(m), Role: getRole(m),
                 Skills: getSkills(m), 'T-Shirt': getSize(m), Amount: AMOUNT_PER_PLAYER,
-                'Payment Ref': getRef(m), Screenshot: getShot(m), Registered: getTime(m)
+                'Payment Ref': getRef(m), 'Refund UPI': getRefund(m), Screenshot: getShot(m), Registered: getTime(m)
             }));
         }
         function exportToExcel() {
