@@ -293,6 +293,11 @@
                 <div class="size-totals" id="mAgeTotals"></div>
             </div>
 
+            <div class="table-container" style="padding: 20px 25px;">
+                <div class="table-header" style="margin-bottom: 14px;"><h2 style="font-size: 1.2em;">👕 T-Shirt Size Totals</h2></div>
+                <div class="size-totals" id="mSizeTotals"></div>
+            </div>
+
             <div class="controls-panel">
                 <div class="search-row" style="grid-template-columns: 2fr 1fr auto;">
                     <input type="text" id="mSearchInput" class="search-input" placeholder="🔍 Search by UID, name, phone...">
@@ -328,6 +333,7 @@
                             <th onclick="mSort('dob')">DOB ↕</th>
                             <th onclick="mSort('age')">Age ↕</th>
                             <th>Bracket</th>
+                            <th>T-Shirt</th>
                             <th>Payment Ref</th>
                             <th>Proof</th>
                             <th onclick="mSort('timestamp')">Registered ↕</th>
@@ -364,6 +370,8 @@
         // (the long code in its URL: docs.google.com/spreadsheets/d/<THIS_BIT>/edit) and
         // share that sheet "Anyone with the link → Viewer" so this dashboard can read it.
         const MAHILA_SHEET_ID = "1VSEL6flO1s9IdjXTorplfAgIj-Q6lEJ_5EJLoJWiRGo";
+        // Mahila shirts use their own size run (XS.. and 2XL rather than XXL)
+        const MAHILA_SIZES = ['XS','S','M','L','XL','2XL','3XL','4XL'];
         // Reads/saves the 8 teams. TEAMS_CSV reads the "Teams" tab; saving the
         // teams needs the same Apps Script /exec URL the form uses.
         const TEAMS_CSV = "https://docs.google.com/spreadsheets/d/1yllfr4bB-vhakCkgvhQuVurSnSUp76nrNIOpW23SwTU/gviz/tq?tqx=out:csv&sheet=Teams";
@@ -821,6 +829,17 @@
             el.innerHTML = pills.length
                 ? pills.join('') + '<div class="size-pill" style="background:var(--primary);color:#fff;">Total - ' + mahilaAll.length + '</div>'
                 : '<div style="color:#9ca3af;">No ages yet.</div>';
+
+            // T-shirt totals, for ordering
+            const sEl = document.getElementById('mSizeTotals');
+            const sc = {};
+            mahilaAll.forEach(m => { const v = (getSize(m) || '').toUpperCase(); if (v) sc[v] = (sc[v] || 0) + 1; });
+            const known = MAHILA_SIZES.filter(z => sc[z]);
+            const extra = Object.keys(sc).filter(z => MAHILA_SIZES.indexOf(z) < 0);
+            const sPills = known.concat(extra).map(z => '<div class="size-pill">' + esc(z) + ' - <span>' + sc[z] + '</span></div>');
+            sEl.innerHTML = sPills.length
+                ? sPills.join('') + '<div class="size-pill" style="background:var(--primary);color:#fff;">Total - ' + mahilaAll.length + '</div>'
+                : '<div style="color:#9ca3af;">No sizes yet.</div>';
         }
 
         function mApplyFilters() {
@@ -882,6 +901,7 @@
                     '<td>' + esc(getDOB(m) || '-') + '</td>' +
                     '<td>' + esc(getAge(m)) + '</td>' +
                     '<td><span class="size-badge">' + esc(ageBracket(m) || '-') + '</span></td>' +
+                    '<td><span class="size-badge">' + esc(getSize(m) || '-') + '</span></td>' +
                     '<td class="ref-cell">' + esc(getRef(m) || '-') + '</td>' +
                     '<td>' + proofCell(getShot(m)) + '</td>' +
                     '<td>' + esc(fmtDate(getTime(m))) + '</td>';
@@ -893,7 +913,7 @@
         function mExportExcel() {
             const rows = mahilaFiltered.map(m => ({
                 UID: getUID(m), Name: getName(m), Phone: getPhone(m), DOB: getDOB(m),
-                Age: getAge(m), 'Age Bracket': ageBracket(m), Amount: AMOUNT_PER_PLAYER,
+                Age: getAge(m), 'Age Bracket': ageBracket(m), 'T-Shirt': getSize(m), Amount: AMOUNT_PER_PLAYER,
                 'Payment Ref': getRef(m), Screenshot: getShot(m), Registered: getTime(m)
             }));
             if (!rows.length) return alert('No data to export.');
