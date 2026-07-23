@@ -118,6 +118,11 @@
         .size-totals { display: flex; flex-wrap: wrap; gap: 12px; }
         .size-pill { background: var(--gray-100); border-radius: 10px; padding: 10px 18px; font-weight: 700; color: var(--gray-800); font-size: 1.05em; }
         .size-pill span { color: var(--primary); }
+        .role-group { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; width: 100%; }
+        .role-group + .role-group { margin-top: 4px; }
+        .role-group-label { min-width: 90px; font-weight: 800; color: var(--gray-700); font-size: 0.95em; }
+        .role-group-pills { display: flex; flex-wrap: wrap; gap: 10px; }
+        .size-pill[style*="var(--primary)"] span { color: #fff; }
 
         /* Team builder */
         .teams-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
@@ -579,18 +584,46 @@
                 : '<div style="color:#9ca3af;">No ages yet.</div>';
         }
 
+        // Batsman / Bowler counts, broken down by age group.
         function renderRoleTotals() {
             const el = document.getElementById('roleTotals');
             if (!el) return;
-            const order = ['Batsman', 'Bowler', 'All Rounder', 'WK Keeper'];
-            const counts = {};
-            allPlayers.forEach(m => { const r = (getRole(m) || '').trim(); if (r) counts[r] = (counts[r] || 0) + 1; });
-            const known = order.filter(r => counts[r] != null);
-            const extra = Object.keys(counts).filter(r => !order.includes(r));
-            const all = known.concat(extra);
-            if (!all.length) { el.innerHTML = '<div style="color:#9ca3af;">No roles yet.</div>'; return; }
-            el.innerHTML = all.map(r => '<div class="size-pill">' + esc(r) + ' - <span>' + counts[r] + '</span></div>').join('') +
-                '<div class="size-pill" style="background:var(--primary);color:#fff;">Total - ' + allPlayers.length + '</div>';
+            const roles = ['Batsman', 'Bowler'];
+            // one tally per age bracket, plus a "No age" bucket
+            const rows = AGE_BRACKETS.map(b => ({ label: b.label, Batsman: 0, Bowler: 0, other: 0 }));
+            const noAge = { label: 'No age', Batsman: 0, Bowler: 0, other: 0 };
+            const totals = { Batsman: 0, Bowler: 0, other: 0 };
+
+            allPlayers.forEach(m => {
+                const br = ageBracket(m);
+                const row = br ? rows.find(r => r.label === br) : noAge;
+                if (!row) return;
+                const r = (getRole(m) || '').trim();
+                const key = roles.includes(r) ? r : 'other';
+                row[key]++; totals[key]++;
+            });
+
+            const groups = rows.concat(noAge).filter(r => r.Batsman || r.Bowler || r.other);
+            if (!groups.length) { el.innerHTML = '<div style="color:#9ca3af;">No players yet.</div>'; return; }
+
+            el.innerHTML = groups.map(r =>
+                '<div class="role-group">' +
+                    '<div class="role-group-label">' + esc(r.label) + '</div>' +
+                    '<div class="role-group-pills">' +
+                        '<div class="size-pill">🏏 Batsman - <span>' + r.Batsman + '</span></div>' +
+                        '<div class="size-pill">🎯 Bowler - <span>' + r.Bowler + '</span></div>' +
+                        (r.other ? '<div class="size-pill">Other - <span>' + r.other + '</span></div>' : '') +
+                    '</div>' +
+                '</div>'
+            ).join('') +
+            '<div class="role-group">' +
+                '<div class="role-group-label" style="color:var(--primary);">All ages</div>' +
+                '<div class="role-group-pills">' +
+                    '<div class="size-pill" style="background:var(--primary);color:#fff;">🏏 Batsman - <span>' + totals.Batsman + '</span></div>' +
+                    '<div class="size-pill" style="background:var(--primary);color:#fff;">🎯 Bowler - <span>' + totals.Bowler + '</span></div>' +
+                    (totals.other ? '<div class="size-pill" style="background:var(--primary);color:#fff;">Other - <span>' + totals.other + '</span></div>' : '') +
+                '</div>' +
+            '</div>';
         }
 
         function mode(arr) {
