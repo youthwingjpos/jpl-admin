@@ -137,6 +137,35 @@
         .save-status { color: var(--primary); font-weight: 600; font-size: 0.9em; }
 
 
+
+        /* Team builder - searchable player picker */
+        .slot-pick { position: relative; flex: 1; }
+        .slot-pick .slot-name { width: 100%; }
+        .slot-clear {
+            border: none; background: var(--gray-100); color: var(--gray-600); cursor: pointer;
+            width: 28px; height: 28px; border-radius: 8px; font-size: 1.1em; line-height: 1; flex-shrink: 0;
+        }
+        .slot-clear:hover { background: #fee2e2; color: #991b1b; }
+        .pick-list {
+            display: none; position: absolute; z-index: 50; left: 0; right: 0; top: calc(100% + 4px);
+            background: #fff; border: 1px solid var(--gray-200); border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15); max-height: 260px; overflow-y: auto;
+        }
+        .pick-list.show { display: block; }
+        .pick-item { display: grid; grid-template-columns: 54px 1fr; gap: 2px 10px; padding: 8px 12px; cursor: pointer; border-bottom: 1px solid var(--gray-100); }
+        .pick-item:hover, .pick-item.active { background: #eff6ff; }
+        .pick-item.taken { opacity: 0.45; cursor: not-allowed; }
+        .pick-uid { font-weight: 700; color: var(--gray-700); font-size: 0.85em; }
+        .pick-name { font-weight: 600; color: var(--gray-900); font-size: 0.92em; }
+        .pick-meta { grid-column: 2; color: var(--gray-600); font-size: 0.78em; }
+        .pick-empty { padding: 12px; color: #9ca3af; font-size: 0.9em; text-align: center; }
+
+        .slot-info { display: none; flex-wrap: wrap; gap: 6px; align-items: center; margin: -2px 0 12px 30px; }
+        .slot-info.show { display: flex; }
+        .si-name { font-weight: 700; color: var(--gray-900); font-size: 0.86em; }
+        .si-chip { background: var(--gray-100); color: var(--gray-700); border-radius: 20px; padding: 2px 9px; font-size: 0.75em; font-weight: 600; white-space: nowrap; }
+        .si-chip.role { background: #dbeafe; color: #1e40af; }
+
         @media (max-width: 768px) { .search-row { grid-template-columns: 1fr; } }
     </style>
 </head>
@@ -191,6 +220,13 @@
                 <h2 style="font-size: 1.2em;">🎂 Age Brackets</h2>
             </div>
             <div class="size-totals" id="ageTotals"></div>
+        </div>
+
+        <div class="table-container" style="padding: 20px 25px;">
+            <div class="table-header" style="margin-bottom: 14px;">
+                <h2 style="font-size: 1.2em;">🏏 Playing Roles</h2>
+            </div>
+            <div class="size-totals" id="roleTotals"></div>
         </div>
 
         <div class="controls-panel">
@@ -273,6 +309,7 @@
                     <h2 style="font-size: 1.3em; color: var(--gray-900);">🏏 Team Builder — 10 Teams × 8 Players</h2>
                     <div style="display: flex; gap: 12px; align-items: center;">
                         <span class="save-status" id="teamsSaveStatus"></span>
+                        <button onclick="exportTeamsExcel()" class="btn btn-primary">📥 Download Teams (Excel)</button>
                         <button onclick="saveTeams()" class="btn btn-success">💾 Save Teams</button>
                     </div>
                 </div>
@@ -347,7 +384,6 @@
         </div>
 
 
-        <datalist id="playerNames"></datalist>
     </div>
 
     <!-- Screenshot lightbox -->
@@ -484,6 +520,8 @@
         const getStatus = m => g(m, ['Status','status']);
         const getWaitNo = m => g(m, ['Waiting No','Waiting Number','waitingNo','Waitlist No']);
         const getRefund = m => g(m, ['Refund UPI','Refund Upi','refundUpi','Refund']);
+        const getMemberName  = m => g(m, ['Member Name','memberName']);
+        const getMemberPhone = m => g(m, ['Member Phone','memberPhone']);
         const getShot  = m => {
             const named = g(m, ['Screenshot','screenshot','Proof','Payment Screenshot']);
             if (named) return named;
@@ -510,8 +548,8 @@
             document.getElementById('statTopSize').textContent = mode(allPlayers.map(getSize)) || '--';
             renderSizeTotals();
             renderAgeTotals();
-            updatePlayerDatalist();
-            if (teamsBuilt) refreshTeamRoles();
+            renderRoleTotals();
+            if (teamsBuilt) { buildTeamsUI(); }
         }
 
         function renderSizeTotals() {
@@ -539,6 +577,20 @@
             el.innerHTML = pills.length
                 ? pills.join('') + '<div class="size-pill" style="background:var(--primary);color:#fff;">Total - ' + allPlayers.length + '</div>'
                 : '<div style="color:#9ca3af;">No ages yet.</div>';
+        }
+
+        function renderRoleTotals() {
+            const el = document.getElementById('roleTotals');
+            if (!el) return;
+            const order = ['Batsman', 'Bowler', 'All Rounder', 'WK Keeper'];
+            const counts = {};
+            allPlayers.forEach(m => { const r = (getRole(m) || '').trim(); if (r) counts[r] = (counts[r] || 0) + 1; });
+            const known = order.filter(r => counts[r] != null);
+            const extra = Object.keys(counts).filter(r => !order.includes(r));
+            const all = known.concat(extra);
+            if (!all.length) { el.innerHTML = '<div style="color:#9ca3af;">No roles yet.</div>'; return; }
+            el.innerHTML = all.map(r => '<div class="size-pill">' + esc(r) + ' - <span>' + counts[r] + '</span></div>').join('') +
+                '<div class="size-pill" style="background:var(--primary);color:#fff;">Total - ' + allPlayers.length + '</div>';
         }
 
         function mode(arr) {
@@ -733,7 +785,7 @@
                 Club: getClub(m), UID: getUID(m), Name: getName(m), Phone: getPhone(m), DOB: getDOB(m),
                 Age: getAge(m), 'Age Bracket': ageBracket(m), Role: getRole(m),
                 Skills: getSkills(m), 'T-Shirt': getSize(m), Amount: AMOUNT_PER_PLAYER,
-                'Payment Ref': getRef(m), 'Refund UPI': getRefund(m), Screenshot: getShot(m), Registered: getTime(m)
+                'Payment Ref': getRef(m), 'Refund UPI': getRefund(m), 'Member Name': getMemberName(m), 'Member Phone': getMemberPhone(m), Screenshot: getShot(m), Registered: getTime(m)
             }));
         }
         function exportToExcel() {
@@ -778,7 +830,7 @@
 
             if (tab === 'teams') {
                 if (!teamsBuilt) initTeams();
-                else { updatePlayerDatalist(); refreshTeamRoles(); }
+                else refreshTeamRoles();
             } else if (tab === 'mahila' && !mahilaLoaded) {
                 loadMahila();
             }
@@ -969,16 +1021,34 @@
             return teams;
         }
 
+        // ---------- player lookup ----------
+        // Teams store the player's UID (stable) rather than their typed name, so a
+        // renamed or duplicated name can't detach a player from their registration.
+        // Legacy team rows hold names, so lookups accept either.
+        function playerByKey(key) {
+            const k = String(key || '').trim().toLowerCase();
+            if (!k) return null;
+            return allPlayers.find(p => String(getUID(p)).trim().toLowerCase() === k) ||
+                   allPlayers.find(p => (getName(p) || '').trim().toLowerCase() === k) || null;
+        }
+        function playerLabel(p) {
+            return (getUID(p) ? getUID(p) + ' — ' : '') + (getName(p) || '');
+        }
+
         function buildTeamsUI() {
-            updatePlayerDatalist();
             const grid = document.getElementById('teamsGrid');
             grid.innerHTML = teamsData.map((t, ti) => {
                 const slots = t.players.map((p, si) =>
-                    '<div class="slot">' +
+                    '<div class="slot" id="slot-' + ti + '-' + si + '">' +
                         '<span class="slot-num">' + (si + 1) + '</span>' +
-                        '<input class="slot-name" list="playerNames" data-t="' + ti + '" data-s="' + si + '" value="' + esc(p) + '" placeholder="Player ' + (si + 1) + '">' +
-                        '<span class="slot-role" id="role-' + ti + '-' + si + '">—</span>' +
-                    '</div>'
+                        '<div class="slot-pick">' +
+                            '<input class="slot-name" autocomplete="off" data-t="' + ti + '" data-s="' + si + '" ' +
+                                'value="' + esc(slotDisplay(p)) + '" placeholder="Search name or UID…">' +
+                            '<div class="pick-list" id="pick-' + ti + '-' + si + '"></div>' +
+                        '</div>' +
+                        '<button class="slot-clear" title="Clear" data-t="' + ti + '" data-s="' + si + '">&times;</button>' +
+                    '</div>' +
+                    '<div class="slot-info" id="info-' + ti + '-' + si + '"></div>'
                 ).join('');
                 return '<div class="team-card">' +
                     '<input class="team-name-input" data-t="' + ti + '" value="' + esc(t.name) + '" placeholder="Team ' + (ti + 1) + ' name">' +
@@ -988,48 +1058,184 @@
             grid.querySelectorAll('.team-name-input').forEach(inp => {
                 inp.addEventListener('input', e => { teamsData[+e.target.dataset.t].name = e.target.value; });
             });
+
             grid.querySelectorAll('.slot-name').forEach(inp => {
-                inp.addEventListener('input', e => {
-                    const ti = +e.target.dataset.t, si = +e.target.dataset.s;
-                    teamsData[ti].players[si] = e.target.value;
-                    updateSlotRole(ti, si);
+                const ti = +inp.dataset.t, si = +inp.dataset.s;
+                inp.addEventListener('input', () => showSuggestions(ti, si, inp.value));
+                inp.addEventListener('focus', () => showSuggestions(ti, si, inp.value));
+                inp.addEventListener('keydown', e => {
+                    const list = document.getElementById('pick-' + ti + '-' + si);
+                    const items = [...list.querySelectorAll('.pick-item')];
+                    if (!items.length) return;
+                    const cur = items.findIndex(x => x.classList.contains('active'));
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        const next = e.key === 'ArrowDown'
+                            ? Math.min(cur + 1, items.length - 1) : Math.max(cur - 1, 0);
+                        items.forEach(x => x.classList.remove('active'));
+                        items[next < 0 ? 0 : next].classList.add('active');
+                        items[next < 0 ? 0 : next].scrollIntoView({ block: 'nearest' });
+                    } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        (items[cur] || items[0]).click();
+                    } else if (e.key === 'Escape') {
+                        list.classList.remove('show');
+                    }
+                });
+                // A half-typed name must not be mistaken for a selection.
+                inp.addEventListener('blur', () => setTimeout(() => {
+                    document.getElementById('pick-' + ti + '-' + si).classList.remove('show');
+                    const p = playerByKey(teamsData[ti].players[si]);
+                    inp.value = p ? playerLabel(p) : '';
+                    if (!p) { teamsData[ti].players[si] = ''; renderSlotInfo(ti, si); }
+                }, 180));
+            });
+
+            grid.querySelectorAll('.slot-clear').forEach(btn => {
+                btn.addEventListener('click', e => {
+                    const ti = +btn.dataset.t, si = +btn.dataset.s;
+                    teamsData[ti].players[si] = '';
+                    document.querySelector('.slot-name[data-t="' + ti + '"][data-s="' + si + '"]').value = '';
+                    renderSlotInfo(ti, si);
                 });
             });
+
             refreshTeamRoles();
+        }
+
+        function slotDisplay(stored) {
+            const p = playerByKey(stored);
+            return p ? playerLabel(p) : (stored || '');
+        }
+
+        /** Players already used in ANY team - so nobody gets picked twice. */
+        function assignedKeys(exceptTi, exceptSi) {
+            const used = new Set();
+            teamsData.forEach((t, ti) => t.players.forEach((p, si) => {
+                if (ti === exceptTi && si === exceptSi) return;
+                const m = playerByKey(p);
+                if (m) used.add(String(getUID(m)).trim());
+            }));
+            return used;
+        }
+
+        function showSuggestions(ti, si, query) {
+            const list = document.getElementById('pick-' + ti + '-' + si);
+            const q = String(query || '').trim().toLowerCase();
+            const used = assignedKeys(ti, si);
+
+            let pool = allPlayers.filter(p => !isWaiting(p));      // confirmed players only
+            if (q) {
+                pool = pool.filter(p =>
+                    (getName(p) || '').toLowerCase().includes(q) ||
+                    String(getUID(p)).toLowerCase().includes(q) ||
+                    String(getPhone(p)).includes(q));
+            }
+            pool = pool.slice(0, 40);
+
+            if (!pool.length) {
+                list.innerHTML = '<div class="pick-empty">No matching confirmed player.</div>';
+                list.classList.add('show');
+                return;
+            }
+            list.innerHTML = pool.map(p => {
+                const uid = String(getUID(p)).trim();
+                const taken = used.has(uid);
+                return '<div class="pick-item' + (taken ? ' taken' : '') + '" data-uid="' + esc(uid) + '">' +
+                    '<span class="pick-uid">' + esc(uid || '—') + '</span>' +
+                    '<span class="pick-name">' + esc(getName(p) || '') + '</span>' +
+                    '<span class="pick-meta">' + esc(getRole(p) || '') +
+                        (getSize(p) ? ' · ' + esc(getSize(p)) : '') +
+                        (getAge(p) ? ' · ' + esc(getAge(p)) + 'y' : '') +
+                        (taken ? ' · already picked' : '') + '</span></div>';
+            }).join('');
+            list.classList.add('show');
+
+            list.querySelectorAll('.pick-item').forEach(item => {
+                item.addEventListener('mousedown', e => e.preventDefault());  // keep focus
+                item.addEventListener('click', () => {
+                    const uid = item.dataset.uid;
+                    if (used.has(uid)) { alert('That player is already in a team.'); return; }
+                    teamsData[ti].players[si] = uid;
+                    document.querySelector('.slot-name[data-t="' + ti + '"][data-s="' + si + '"]').value =
+                        playerLabel(playerByKey(uid));
+                    list.classList.remove('show');
+                    renderSlotInfo(ti, si);
+                });
+            });
+        }
+
+        /** The detail line under a filled slot: Name, UID, T-shirt, Age, Phone. */
+        function renderSlotInfo(ti, si) {
+            const el = document.getElementById('info-' + ti + '-' + si);
+            if (!el) return;
+            const p = playerByKey(teamsData[ti].players[si]);
+            if (!p) { el.innerHTML = ''; el.classList.remove('show'); return; }
+            el.innerHTML =
+                '<span class="si-name">' + esc(getName(p) || '') + '</span>' +
+                '<span class="si-chip">UID ' + esc(getUID(p) || '—') + '</span>' +
+                '<span class="si-chip">👕 ' + esc(getSize(p) || '—') + '</span>' +
+                '<span class="si-chip">🎂 ' + esc(getAge(p) || '—') + '</span>' +
+                '<span class="si-chip">📞 ' + esc(getPhone(p) || '—') + '</span>' +
+                '<span class="si-chip role">' + esc(getRole(p) || '—') + '</span>';
+            el.classList.add('show');
         }
 
         function refreshTeamRoles() {
             if (!teamsData) return;
-            teamsData.forEach((t, ti) => t.players.forEach((p, si) => updateSlotRole(ti, si)));
+            teamsData.forEach((t, ti) => t.players.forEach((p, si) => renderSlotInfo(ti, si)));
         }
 
-        function updateSlotRole(ti, si) {
-            const badge = document.getElementById('role-' + ti + '-' + si);
-            if (!badge) return;
-            const val = (teamsData[ti].players[si] || '').trim();
-            if (!val) { badge.textContent = '—'; badge.className = 'slot-role'; return; }
-            const role = findPlayerRole(val);
-            if (!role) { badge.textContent = 'not registered'; badge.className = 'slot-role'; return; }
-            const map = { 'Batsman': 'batsman', 'Bowler': 'bowler', 'All Rounder': 'allrounder', 'WK Keeper': 'wk' };
-            badge.textContent = role;
-            badge.className = 'slot-role ' + (map[role] || '');
+        /** Teams -> one flat sheet, one row per player, with their full details. */
+        function exportTeamsExcel() {
+            const rows = [];
+            teamsData.forEach((t, ti) => {
+                const teamName = (t.name || '').trim() || ('Team ' + (ti + 1));
+                t.players.forEach((key, si) => {
+                    const p = playerByKey(key);
+                    if (!p && !String(key || '').trim()) return;      // skip empty slots
+                    rows.push({
+                        Team: teamName,
+                        'Slot': si + 1,
+                        UID: p ? getUID(p) : '',
+                        Name: p ? getName(p) : String(key),
+                        Phone: p ? getPhone(p) : '',
+                        Age: p ? getAge(p) : '',
+                        DOB: p ? getDOB(p) : '',
+                        'T-Shirt': p ? getSize(p) : '',
+                        Role: p ? getRole(p) : '',
+                        Skills: p ? getSkills(p) : '',
+                        Club: p ? getClub(p) : '',
+                        Status: p ? (isWaiting(p) ? 'Waiting List' : 'Confirmed') : 'Not registered'
+                    });
+                });
+            });
+            if (!rows.length) return alert('No players have been added to any team yet.');
+            const ws = XLSX.utils.json_to_sheet(rows);
+            ws['!cols'] = [{wch:18},{wch:6},{wch:8},{wch:24},{wch:13},{wch:6},{wch:12},
+                           {wch:9},{wch:12},{wch:28},{wch:12},{wch:13}];
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Teams');           // single sheet, as asked
+            XLSX.writeFile(wb, 'JPL_Teams.xlsx');
         }
 
-        function findPlayerRole(query) {
-            const q = query.trim().toLowerCase();
-            const m = allPlayers.find(p =>
-                (getName(p) || '').trim().toLowerCase() === q ||
-                String(getUID(p) || '').trim().toLowerCase() === q);
-            return m ? getRole(m) : '';
-        }
-
-        function updatePlayerDatalist() {
-            const dl = document.getElementById('playerNames');
-            if (!dl) return;
-            dl.innerHTML = allPlayers.map(p => '<option value="' + esc(getName(p) || getUID(p)) + '">').join('');
+        /** Catches a player sitting in two slots (e.g. teams restored from the sheet). */
+        function duplicateAssignments() {
+            const seen = {}, dupes = [];
+            teamsData.forEach((t, ti) => t.players.forEach((key, si) => {
+                const m = playerByKey(key);
+                if (!m) return;
+                const uid = String(getUID(m)).trim();
+                if (seen[uid]) dupes.push((getName(m) || uid) + ' (' + seen[uid] + ' and ' +
+                    ((t.name || 'Team ' + (ti + 1)) + ' slot ' + (si + 1)) + ')');
+                else seen[uid] = (t.name || 'Team ' + (ti + 1)) + ' slot ' + (si + 1);
+            }));
+            return dupes;
         }
 
         async function saveTeams() {
+            const dupes = duplicateAssignments();
+            if (dupes.length && !confirm('These players appear in more than one slot:' + String.fromCharCode(10,10) + dupes.join(String.fromCharCode(10)) + String.fromCharCode(10,10) + 'Save anyway?')) return;
             saveTeamsLocal();
             const status = document.getElementById('teamsSaveStatus');
             status.textContent = 'Saving...';
